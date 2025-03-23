@@ -1,0 +1,5 @@
+# TODO: SQL statements the database supports
+
+BEGIN TRANSACTION
+
+END TRANSACTION
