@@ -2,7 +2,7 @@
 
 PreSeQL (`.pseql`) is an embedded database based on a B+ Tree, inspired by SQLite. It has pretty poor support for the full SQL language spec (not even SQL89) and we'll proudly admit so. Written in C so you know its good.
 
-Simplifications are made for the interest of time. Such as supporting way less types in the database (minimum `TEXT` type), a smaller subset of the SQL language of our choosing, and only supporting UNIX and UNIX-like platforms. 
+Simplifications are made for the interest of time. Such as supporting way less types in the database (minimum `TEXT` type), a smaller subset of the SQL language of our choosing, and only supporting UNIX and UNIX-like platforms. Relations between tables are also optional features as that requires `JOIN` via a Join table with Primary and Foreign keys.
 
 ## Architecture
 
@@ -35,6 +35,7 @@ In summary the project consists of the following parts:
 For some quality of life features that might be explored: 
 - (Frontend) Bind operations
     - Replace literals/variables in SQL statements with parameters - like a string format
+- (Frontend/Backend) `JOIN` for relationships between tables
 - (Backend) Write-Ahead Logging
     - Journal that records transactions that have been committed but not yet applied to database
     - This might require a main recording thread and a secondary processing thread - therefore more complex
