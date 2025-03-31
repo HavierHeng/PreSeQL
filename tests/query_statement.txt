@@ -1,0 +1,4 @@
+BEING TRANSACTION
+    SELECT * FROM employees;
+    SELECT name, age FROM employees;
+END TRANSACTION

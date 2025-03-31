@@ -1,24 +1,10 @@
-# TODO: SQL statements the database supports
-
-BEGIN TRANSACTION
+BEGIN TRANSACTION;
     CREATE TABLE employees (
         id VARCHAR(100),
         name VARCHAR(100),
         age VARCHAR(100),
         department VARCHAR(50)
     );
-END TRANSACTION
-
-BEGIN TRANSACTION
-    INSERT INTO employees (id, name, age, department) VALUES (1, 'Alice', 30, 'HR');
-END TRANSACTION
-
-BEING TRANSACTION
-    SELECT * FROM employees;
-    SELECT name, age FROM employees;
-END TRANSACTION
-
-BEGIN TRANSACTION;
     INSERT INTO employees (id, name, age, department) VALUES (4, 'Diana', 35, 'Finance');
     SELECT name, age FROM employees
 COMMIT;
