@@ -6,5 +6,5 @@ BEGIN TRANSACTION;
         department VARCHAR(50)
     );
     INSERT INTO employees (id, name, age, department) VALUES (4, 'Diana', 35, 'Finance');
-    SELECT name, age FROM employees
+    SELECT name, age FROM employees;
 COMMIT;
