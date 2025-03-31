@@ -8,4 +8,3 @@ BEGIN TRANSACTION;
     INSERT INTO employees (id, name, age, department) VALUES (4, 'Diana', 35, 'Finance');
     SELECT name, age FROM employees
 COMMIT;
-
