@@ -1,8 +1,8 @@
-BEGIN TRANSACTION
+BEGIN TRANSACTION;
     CREATE TABLE employees (
         id VARCHAR(100),
         name VARCHAR(100),
         age VARCHAR(100),
         department VARCHAR(50)
     );
-END TRANSACTION
+COMMIT;
