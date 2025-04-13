@@ -1,3 +1,4 @@
 BEGIN TRANSACTION;
     SELECT * FROM employees;
+    SELECT name, department FROM employees;
 COMMIT;

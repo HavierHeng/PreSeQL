@@ -1,8 +1,8 @@
 BEGIN TRANSACTION;
     CREATE TABLE employees (
-        id VARCHAR(100),
+        id INT,
         name VARCHAR(100),
-        age VARCHAR(100),
-        department VARCHAR(50)
+        age INT,
+        department VARCHAR(100)
     );
 COMMIT;
