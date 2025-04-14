@@ -4,13 +4,13 @@
 // #include "../../include/preseql.h"
 
 #include "../../include/tokenizer.h"
-// #include "../../include/parser.h" // for later
+#include "../../include/parser.h"
 
 #define INPUT_BUFFER_SIZE 1024
 
 void run_client() {
     char preseql_input[INPUT_BUFFER_SIZE];
-    char *statement = NULL;  // dynamically grown buffer
+    char *statement = NULL;
     size_t statement_len = 0;
 
     printf("Welcome to PreSeQL\n");
@@ -69,6 +69,7 @@ void run_client() {
             }
 
             // TODO: Parsing
+            parse_tokens(token_stream, token_count);
 
             // Clean Up
             free_tokens(token_stream, token_count);

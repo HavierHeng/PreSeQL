@@ -239,10 +239,10 @@ Token **tokenize(const char* sql_commands, size_t *token_count) {
             token_stream = (Token **)realloc(token_stream, (*token_count + 1) * sizeof(Token *));
             token_stream[*token_count] = token;
             (*token_count)++;
-            printf("Token { type: %d, lexeme: '%s', line: %d }\n",
-                token->type,
-                token->lexeme,
-                token->line_number);
+            // printf("Token { type: %d, lexeme: '%s', line: %d }\n",
+            //     token->type,
+            //     token->lexeme,
+            //     token->line_number);
             current_position += longest_match;
         } else {
             if (sql_commands[current_position] == '\n') {
