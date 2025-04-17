@@ -11,12 +11,23 @@
 #define RADIX_BITS 8
 #define RADIX_SIZE (1 << RADIX_BITS)
 
+
 typedef struct RadixNode {
     struct RadixNode *children[RADIX_SIZE];  // next level
     int32_t status; // valid at leaves only (-1 = not free)
 } RadixNode;
 
+typedef struct RadixTree {
+    RadixNode root;
+} RadixTree;
 
-void radix_insert(RadixNode *root, uint32_t page_num, int32_t slot);
-int32_t radix_lookup(RadixNode *root, uint32_t page_num);
-void walk_radix(RadixNode *node, uint32_t prefix, int depth, void (*cb)(uint32_t page, int slot));
+RadixTree* radix_tree_create();
+
+// Basic Radix Tree operations
+void radix_tree_insert(RadixTree *tree, uint32_t page_no, int32_t slot);
+void radix_tree_delete(RadixTree *tree, uint32_t page_no);
+int32_t radix_tree_pop_min(RadixTree *tree);
+int32_t radix_tree_lookup(RadixTree *tree, uint32_t page_no);
+
+// Walk while executing callback function - e.g free
+void radix_tree_walk(RadixNode *node, uint32_t prefix, int depth, void (*cb)(uint32_t page, int slot));
