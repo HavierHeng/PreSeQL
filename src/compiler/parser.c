@@ -2,7 +2,7 @@
 #include <stdlib.h>
 #include <string.h>
 
-#include "../../include/parser.h"
+#include "parser.h"
 
 /* What the Parser Should Do:
 1. Go through the streams of tokens

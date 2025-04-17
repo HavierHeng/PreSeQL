@@ -4,7 +4,7 @@
 #include <stdbool.h>
 #include <regex.h>
 
-#include "../../include/tokenizer.h"
+#include "tokenizer.h"
 
 
 // Constructor for the Token struct
