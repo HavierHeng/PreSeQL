@@ -3,9 +3,9 @@
 #define PRESEQL_H
 
 #include "opcodes.h"
-#include "status/db-status.h"
-#include "status/step-status.h"
-#include "types/sql-types.h"
+#include "status/db.h"
+#include "status/step.h"
+#include "types/sql_types.h"
 
 /* Open/Close DB file, as a read/write database */
 PSqlStatus psql_open(PSql* db);

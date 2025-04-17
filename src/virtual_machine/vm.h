@@ -18,7 +18,7 @@ typedef struct PSqlStatement {
     int row_count;            // Number of columns in the row
     bool has_row;             // Is a row currently ready?
 
-    int txn_id;               // Transaction context (if applicable)
+    int txn_id;               // Transaction ID, if applicable (BEGIN TRANSACTION)
     
     // Pointers to open tables / cursors
     Cursor **open_cursors;
