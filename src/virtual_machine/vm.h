@@ -4,13 +4,33 @@
 
 #include "opcodes.h"
 
-typedef struct {
-    /* TODO: State Machine needs more states to track its manipulation of B-Tree */
-} PsqlVirtualMachine;
+// The VM state is effectively stored into PSqlStatement
+// The statement is the VM state in and of itself
+// Rather than just a bundle of instructions
+typedef struct PSqlStatement {
+    VMInstruction *program;     // Compiled bytecode / VM instructions
+    int pc;                   // Program counter (current instruction index)
 
-/* Function to parse OPCodes - big switch statement */
-PSqlStatus psql_exec_opcode(PsqlVirtualMachine *vm, PsqlOpCode op, int argc, char** argv);  /* Takes in VM, Opcode, number of arguments and args as a char arr */
+    VMRegister *registers;         // Virtual registers (used for everything)
+    int register_count;
 
+    int row_base;             // Base register index for current row
+    int row_count;            // Number of columns in the row
+    bool has_row;             // Is a row currently ready?
+
+    int txn_id;               // Transaction context (if applicable)
+    
+    // Pointers to open tables / cursors
+    Cursor **open_cursors;
+    int cursor_count;
+
+    // Result status (SQLITE_ROW, SQLITE_DONE, SQLITE_ERROR, etc.)
+    int result_code;
+
+    // Optional: error info, current database, etc.
+    // Error messages will be passed to psql_err
+    char *error_msg;
+} PSqlStatement;
 
 /* OPCodes -> VM Operations as functions - each OpCode has a relevant callback function defined */
 
