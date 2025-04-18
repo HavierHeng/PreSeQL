@@ -1,14 +1,16 @@
-// Journal handles transactions 
-// This is a separate file as having two dynamically growing regions in one db file is too much trouble to keep track of
+/* Journal handles transactions - e.g when BEGIN TRANSACTION is performed
+* This is a separate file from the main db file
+* as having two dynamically growing regions in one db file 
+* is too much trouble to keep track of.
+* 
+* Journal creates a copy of pages that have been modified during transaction
+* It only clears its journal of modified pages on COMMIT
+* i.e the client is certain of changes
+* ROLLBACK can allow for copying back the original data back the pages
+*/
 
 // Journal Header - on disk
 #include "../pager/page_format.h"
+#include "journal_page.h"
 
-// Journal Page - on disk
-typedef struct {
-    uint32_t txn_id;        // Transaction this journal entry belongs to
-    uint32_t original_page; // The page number being backed up
-    uint16_t data_size;     // Optional: size of payload (should usually = PAGE_SIZE)
-    uint16_t reserved;      // Alignment / future use
-    uint8_t  page_data[MAX_DATA_BYTES]; // Full page backup
-} RollbackJournalPage;
+
