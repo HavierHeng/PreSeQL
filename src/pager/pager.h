@@ -13,10 +13,7 @@
 [ Page 3 ] - track FK relations
   └─ Foreign Key catalog (B+ Tree Root Page): table_id, column_name, type, order
   
-[ Page 4 ] - support multiple index types, and track root pages for each table
-  └─ Index catalog (B+ Tree Index Roots): table_id, index_name, root_page, type (B+ or hash)
-
-[ Page 5..X ]
+[ Page 4..X ]
   └─ Table Data Pages (slotted page implementation) - stores the actual data
   └─ Index Pages (B+ trees) - Internal nodes, and leaf nodes which point to data (or other nodes)
   └─ Overflow Pages - for big INTEGER and TEXT that do not fit
