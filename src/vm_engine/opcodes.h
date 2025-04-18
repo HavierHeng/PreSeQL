@@ -2,8 +2,7 @@
 #ifndef PRESEQL_OPCODE_H
 #define PRESEQL_OPCODE_H
 
-#include "../../include/status.h"
-
+#define MAX_OPCODES 50
 /* Note - each OPCode also has its set of valid parameters behind which is not clear here */
 typedef enum
 {
@@ -50,6 +49,12 @@ typedef enum
 
     /* Placeholder for unknown/unimplemented operations */
     OP_NOP
-} PsqlOpCode;
+} PSqlOpcode;
+
+typedef struct
+{
+    PSqlOpcode opcode;
+    int a, b, c;
+} PSqlInstruction;
 
 #endif

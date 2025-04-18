@@ -1,11 +1,10 @@
+/* Example client application that uses the PreSeQL database
+ * PreSeQL is an embedded database - this means that it needs a client application to make sense
+ * */
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-// #include "../../include/preseql.h"
-
-#include "../../include/tokenizer.h"
-#include "../../include/parser.h"
-#include "../generator/generator.h"
+#include "preseql.h"
 
 #define INPUT_BUFFER_SIZE 1024
 
