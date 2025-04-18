@@ -25,7 +25,7 @@ CompiledProgram *init_program()
 }
 
 // Add an instruction to the program
-void emit_instruction(CompiledProgram *program, PsqlOpCode opcode,
+void emit_instruction(CompiledProgram *program, PSqlOpcode opcode,
                       int param1, int param2, const char *string_param)
 {
     // Resize the instructions array if needed
@@ -161,7 +161,7 @@ void print_program(CompiledProgram *program)
 
     for (size_t i = 0; i < program->count; i++)
     {
-        PsqlOpCode op = program->instructions[i].opcode;
+        PSqlOpcode op = program->instructions[i].opcode;
         printf("  %zu: %s, P1=%d, P2=%d, String=%s\n",
                i,
                op < sizeof(opcode_names) / sizeof(opcode_names[0]) ? opcode_names[op] : "UNKNOWN",
