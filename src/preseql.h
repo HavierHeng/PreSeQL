@@ -2,10 +2,19 @@
 #ifndef PRESEQL_H
 #define PRESEQL_H
 
-#include "opcodes.h"
 #include "status/db.h"
 #include "status/step.h"
-#include "types/sql_types.h"
+#include "types/psql_types.h"
+#include "virtual_machine/opcodes.h"
+#include "virtual_machine/vm.h"
+
+/* Database handle structure */
+typedef struct PSqlDB {
+    char *filename;
+    int flags;
+    void *pager;  /* Pointer to pager implementation */
+    char *error_msg;
+} PSql;
 
 /* Open/Close DB file, as a read/write database */
 PSqlStatus psql_open(PSql* db);
@@ -23,13 +32,13 @@ PSqlStatus psql_step(PSqlStatement* stmt);
 /* Extracts the return values from the VM engine state (in Statement).
  * A function is written for each SQL datatype since it affects the return value signature
  * */
-PSqlDataTypes psql_column_type(PSqlStatement* stmt);   /* Query the type to be returned by statement - so know which column function to use */
-PSqlStatus psql_column_text(PSqlStatement* stmt, char* output);
-PSqlStatus psql_column_int(PSqlStatement* stmt, int* output);
+PSqlDataTypes psql_column_type(PSqlStatement* stmt, int column);   /* Query the type to be returned by statement - so know which column function to use */
+PSqlStatus psql_column_text(PSqlStatement* stmt, int column, char** output);
+PSqlStatus psql_column_int(PSqlStatement* stmt, int column, int* output);
 
 
 /* Parameter/String subsitution via literals/variables binding */
-// PSqlStatus psql_bind_text(PSqlStatement* stmt, int index, char *value);
+// PSqlStatus psql_bind_text(PSqlStatement* stmt, int index, const char *value, int length);
 // PSqlStatus psql_bind_text(PSqlStatement* stmt, int index, int value);
 
 /* SQL error handling - for more info when PSQL_ERROR is returned */

@@ -8,6 +8,7 @@
 typedef struct {
     uint16_t num_slots;
     uint16_t slot_directory_offset;
+    uint16_t reference_count;  // If secondary indexes are made, knowing no. of references to the data page will indicate when we can mark the page as free
 } DataPageHeader;
 
 
