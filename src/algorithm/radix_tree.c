@@ -1,6 +1,21 @@
 #include "radix_tree.h"
 
-// Helper function for internal use
+
+/* TODO:
+ * Radix Tree Operations I need to implement
+ * 1) Freelist -> Radix Tree conversion - from disk representation of freelist to memory representation as radix tree - free list is capped at some fixed size in the Header
+ * 2) Radix Tree -> Free - for saving changes back to ddisk ovcasionally - the number of changes before saving is set by a BATCH_SIZE variable
+ * 3) Insert - e.g when page is deleted, i need to add a new page to be tracked
+ * 4) Delete - e.g when page is reused, i need to delete it from radix tree
+ * 5) Walk - if i cannot find the free value, then I simply do a linear search by walking. Alternatively, since i likely track the highest page being used in my page header and journal header, i can just use this for something else
+ * 6) Pop min/find first - Obviously to get the lowest free page available for journal/allocating as data/index/overflow page
+ * 7) init and destroy radix tree - for setup and cleanup
+ * Extra stuff: There is a struct for RadixTree which contains a pointer to the root RadixNode, that is not implemented
+ * Extra stuff 2: Radix Tree is to use the arena_allocator in ../allocator/arena.h - this is just due to the size of the radix tree
+*/ 
+
+
+// Helper function for internal use on Radix Nodes
 static void radix_insert(RadixNode *root, uint32_t page_num, int32_t slot) {
     for (int level = 0; level < 4; ++level) {
         int idx = (page_num >> ((3 - level) * RADIX_BITS)) & 0xFF;
@@ -13,7 +28,7 @@ static void radix_insert(RadixNode *root, uint32_t page_num, int32_t slot) {
 }
 
 
-// Helper function for internal use
+// Helper function for internal use on Radix Nodes
 static int32_t radix_lookup(RadixNode *root, uint32_t page_num) {
     for (int level = 0; level < 4; ++level) {
         int idx = (page_num >> ((3 - level) * RADIX_BITS)) & 0xFF;
@@ -40,20 +55,6 @@ static void walk_radix(RadixNode *node, uint32_t prefix, int depth, void (*cb)(u
         }
     }
 }
-
-/* TODO:
- * Radix Tree Operations I need to implement
- * 1) Freelist -> Radix Tree conversion - from disk representation of freelist to memory representation as radix tree - free list is capped at some fixed size in the Header
- * 2) Radix Tree -> Free - for saving changes back to ddisk ovcasionally - the number of changes before saving is set by a BATCH_SIZE variable
- * 3) Insert - e.g when page is deleted, i need to add a new page to be tracked
- * 4) Delete - e.g when page is reused, i need to delete it from radix tree
- * 5) Walk - if i cannot find the free value, then I simply do a linear search by walking. Alternatively, since i likely track the highest page being used in my page header and journal header, i can just use this for something else
- * 6) Pop min/find first - Obviously to get the lowest free page available for journal/allocating as data/index/overflow page
- * 7) init and destroy radix tree - for setup and cleanup
- * Extra stuff: There is a struct for RadixTree which contains a pointer to the root RadixNode, that is not implemented
- * Extra stuff 2: Radix Tree is to use the arena_allocator in ../allocator/arena.h - this is just due to the size of the radix tree
-*/ 
-
 /*
 // e.g free callback to make journal page freed to be used in walk()
 void free_slot_callback(uint32_t page, int slot) {
