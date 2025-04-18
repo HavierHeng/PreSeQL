@@ -96,6 +96,7 @@ void psql_op_halt(PSqlStatement *vm, int a, int b, int c) {
 }
 
 // Jump table
+// Designed initializer - assign to the index directly
 PSqlOpFunc psql_jump_table[MAX_OPCODES] = {
     [OP_CREATE_TABLE] = psql_op_create_table,
     [OP_OPEN_TABLE] = psql_op_open_table,
