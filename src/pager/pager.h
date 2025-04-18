@@ -1,23 +1,17 @@
 /* Aka the serializer, but also handles read/writes to disk 
+[ Page 0 ] Header Metadata - Stores magic number, versioning and roots of various tables - acts as a boot sector
 
-[ Page 0 ]
-  └─ Magic number, Page size, Version
-  └─ Roots of special system catalogs tables (page 1-4 )
+[ Page 1 ] Table Catalog (B+ Tree Root Page) - track each Index Page for each table, its names and its root page and Index type
 
-[ Page 1 ] - track each table, its names and its root page
-  └─ Table catalog (B+ Tree Root page): table_id, table name, root page, schema ID, flags (hidden/system)
+[ Page 2 ] Column Catalog (B+ Tree Root Page) - track column schema for each table
 
-[ Page 2 ] - track columns for each table
-  └─ Column catalog (B+ Tree Root Page): table_id, column_name, type, order
-
-[ Page 3 ] - track FK relations
-  └─ Foreign Key catalog (B+ Tree Root Page): table_id, column_name, type, order
+[ Page 3 ] Foreign Key Catalog - track Foreign Key Constraints between table to table
   
 [ Page 4..X ]
   └─ Table Data Pages (slotted page implementation) - stores the actual data
-  └─ Index Pages (B+ trees) - Internal nodes, and leaf nodes which point to data (or other nodes)
-  └─ Overflow Pages - for big INTEGER and TEXT that do not fit
-  └─ Free Pages - holes in pages created after deletion of pages (a bitmap/radix tree in the Page 0 header keeps track of what pages are free for reuse - to fill in holes)
+  └─ Index Pages (B+ tree nodes) - Internal nodes, and leaf nodes which point to data (or other nodes)
+  └─ Overflow Pages - for big INTEGER and TEXT that do not fit within a page
+  └─ Free Pages - Pages marked as freed in database file, these are holes created after deletion of pages (a bitmap in the Page 0 header on disk keeps track of what pages are free for reuse - to fill in holes)
  * */
 
 #ifndef PRESEQL_PAGER_H
@@ -38,6 +32,7 @@
 
 // Max keys per B+ Tree node - i.e max number of children a node can have - i.e fanout
 // Max keys is (ORDER-1) for internal nodes, ORDER for leaf nodes
+// Set statically as its on disk
 #define ORDER 256
 
 /* Manage Free Pages via Radix Tree */
@@ -107,19 +102,6 @@ void free_page(Page* page, uint32_t page_no) {
 
 
 // Specialized Init Helpers for B+ Tree indexes and pages
-
-/* TODO:
-* B+ Tree operations:
-* 1) init/destroy - to create and clean up B+ Tree nodes - implicitly part of init data page (a page is a node) - so maybe no need make - probs just need to implement a Radix tree way to find either a freed page or fallback to highest page ID + 1 (stored in header as metadata)
-* 2) btree_search() - to find entry
-* 3) btree_insert() - to add new rows to the B+ Tree index
-* 4) btree_split_leaf() - when leaf is too full, we have to split it. This also sets up the right sibling pointers that B+ Tree is known for fast linear access.
-* 5) btree_split_interal() - when internal is too small. Its a separate function just due to how internal nodes are routers instead of data pointers.
-* 6) btree_iterator_range() - returns a BTreeIterator (or something similar in idea, name needs to be more consistent), allowing me to get range of values
-* 7) Row* btree_iterator_next(BPlusIterator *it) - steps through the iterator and returns the row stored
-* 8) btree_delete() - to delete entries. This is optional because of the complexity to rebalance the tree after operations, but might be useful. Also when entries are deleted, this also updates some reference counter, updates the free page radix tree and so on. Its a cascade effect.
-*/
-
 
 /* TODO:
  * Data operations:

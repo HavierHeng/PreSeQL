@@ -30,7 +30,7 @@ Breaking the page alignment will cause unnecessary I/O operations, as well as wr
   
 [ Page 4..X ]
   └─ Table Data Pages (slotted page implementation) - stores the actual data
-  └─ Index Pages (B+ trees) - Internal nodes, and leaf nodes which point to data (or other nodes)
+  └─ Index Pages (B+ tree nodes) - Internal nodes, and leaf nodes which point to data (or other nodes)
   └─ Overflow Pages - for big INTEGER and TEXT that do not fit within a page
   └─ Free Pages - Pages marked as freed in database file, these are holes created after deletion of pages (a bitmap in the Page 0 header on disk keeps track of what pages are free for reuse - to fill in holes)
 ```

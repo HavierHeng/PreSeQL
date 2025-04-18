@@ -1,6 +1,5 @@
 /* Anything related to the B+ Tree Index */
 
-
 typedef enum {
     BTREE_ROOT = 1,
     BTREE_INTERIOR,
