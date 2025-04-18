@@ -15,6 +15,8 @@
  * Extra stuff 2: Radix Tree is to use the arena_allocator in ../allocator/arena.h - this is just due to the size of the radix tree
 */ 
 
+// TODO: Is this an arena allocator?
+
 // Helper function for internal use on Radix Nodes
 // Uses 4 levels with 4 bits each for 16-bit page numbers
 static void radix_insert(RadixNode *root, uint16_t page_num, int16_t slot) {
@@ -38,49 +40,33 @@ static int16_t radix_lookup(RadixNode *root, uint16_t page_num) {
     return root->status;
 }
 
-// Walk through radix tree and perform callback (e.g update free status)
-static void walk_radix(RadixNode *node, uint16_t prefix, int depth, void (*cb)(uint16_t page, int16_t slot)) {
-    if (!node) return;
-
-    if (depth == 4) {
-        if (node->status != -1) {
-            cb(prefix, node->status);
-        }
-        return;
-    }
-
-    for (int i = 0; i < RADIX_SIZE; ++i) {
-        if (node->children[i]) {
-            walk_radix(node->children[i], (prefix << RADIX_BITS) | i, depth + 1, cb);
-        }
-    }
-}
-
-// Public API implementations that match the header declarations
+// Create a tree
 RadixTree* radix_tree_create() {
     RadixTree* tree = (RadixTree*)calloc(1, sizeof(RadixTree));
     // Root node is already zeroed by calloc
     return tree;
 }
 
-void radix_tree_destroy(RadixTree* tree) {
-    // Helper function to recursively free nodes
-    void free_node(RadixNode* node) {
-        if (!node) return;
-        
-        for (int i = 0; i < RADIX_SIZE; i++) {
-            if (node->children[i]) {
-                free_node(node->children[i]);
-                node->children[i] = NULL;
-            }
-        }
-        
-        if (node != &tree->root) {
-            free(node);
+
+// Helper function to recursively free nodes
+void free_node(RadixNode* node, RadixNode* root) {
+    if (!node) return;
+    
+    for (int i = 0; i < RADIX_SIZE; i++) {
+        if (node->children[i]) {
+            free_node(node->children[i], root);
+            node->children[i] = NULL;
         }
     }
     
-    free_node(&tree->root);
+    // Root node should not be freed from tree struct
+    if (node != root) {
+        free(node);
+    }
+}
+
+void radix_tree_destroy(RadixTree* tree) {
+    free_node(&tree->root, &tree->root);
     free(tree);
 }
 
@@ -137,8 +123,30 @@ int16_t radix_tree_lookup(RadixTree *tree, uint16_t page_no) {
     return radix_lookup(&tree->root, page_no);
 }
 
-void radix_tree_walk(RadixTree *tree, void (*cb)(uint16_t page, int16_t slot)) {
-    walk_radix(&tree->root, 0, 0, cb);
+// Recursive function - Walk through radix tree and perform callback (e.g update free status)
+void walk_radix(RadixNode *node, uint16_t prefix, int depth, void (*cb)(uint16_t page, int16_t slot, void* user_data), void* user_data) {
+    if (!node) return;
+
+    // 16 bits with stride of 4 gives 4 levels - Base case leaf node
+    if (depth == 4) {
+        if (node->status != -1) {
+            cb(prefix, node->status, user_data);
+        }
+        return;
+    }
+
+    // Recurse: Non-leave node - call on children
+    for (int i = 0; i < RADIX_SIZE; ++i) {
+        if (node->children[i]) {
+            walk_radix(node->children[i], (prefix << RADIX_BITS) | i, depth + 1, cb, user_data);
+        }
+    }
+}
+
+// Start walking through the tree and applying callback function
+// Callback function operates on a page no. a slot and some user data that can be used to pass in some data
+void radix_tree_walk(RadixTree *tree, void (*cb)(uint16_t page, int16_t slot, void* user_data), void* user_data) {
+    walk_radix(&tree->root, 0, 0, cb, user_data);
 }
 
 // Convert from freelist to radix tree
@@ -148,16 +156,36 @@ void freelist_to_radix(RadixTree* tree, uint16_t* freelist, size_t count) {
     }
 }
 
+static void collect_free_pages(uint16_t page, int16_t slot, uint16_t* freelist, size_t* count, size_t max_size) {
+    if (*count < max_size) {
+        freelist[(*count)++] = page;
+    }
+}
+
+// Adapter function to match callback signature
+static void collect_adapter(uint16_t page, int16_t slot, void* user_data) {
+    struct {
+        uint16_t* freelist;
+        size_t* count;
+        size_t max_size;
+    }* data = user_data;
+    
+    collect_free_pages(page, slot, data->freelist, data->count, data->max_size);
+}
+
 // Convert from radix tree to freelist
+// This is for serializing back to the Header on disk
 size_t radix_to_freelist(RadixTree* tree, uint16_t* freelist, size_t max_size) {
     size_t count = 0;
+
+    // Pass in struct of output buffers for the callback to fill up
+    // e.g location of freelist (which is a disk location) to be modified
+    struct {
+        uint16_t* freelist;
+        size_t* count;
+        size_t max_size;
+    } data = {freelist, &count, max_size};
     
-    void collect_free_pages(uint16_t page, int16_t slot) {
-        if (count < max_size) {
-            freelist[count++] = page;
-        }
-    }
-    
-    radix_tree_walk(tree, collect_free_pages);
+    radix_tree_walk(tree, collect_adapter, &data);
     return count;
 }

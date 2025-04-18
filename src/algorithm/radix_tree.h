@@ -31,7 +31,8 @@ int16_t radix_tree_pop_min(RadixTree *tree);
 int16_t radix_tree_lookup(RadixTree *tree, uint16_t page_no);
 
 // Walk while executing callback function - e.g free
-void radix_tree_walk(RadixTree *tree, void (*cb)(uint16_t page, int16_t slot));
+// Allows to pass in a user_data parameter for modifying callback behaviour
+void radix_tree_walk(RadixTree *tree, void (*cb)(uint16_t page, int16_t slot, void* user_data), void* user_data);
 
 // Conversion between freelist and radix tree
 void freelist_to_radix(RadixTree* tree, uint16_t* freelist, size_t count);
