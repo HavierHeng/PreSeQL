@@ -4,48 +4,59 @@
 #include <stdio.h>
 #include "./tokenizer.h"
 
-typedef enum {
+typedef enum
+{
     VALUE_TEXT,
     VALUE_INTEGER
 } ValueType;
 
-typedef struct {
+typedef struct
+{
     ValueType type;
-    union  {
+    union
+    {
         char *text_value;
         int int_value;
     };
 } Value;
 
-typedef enum {
+typedef enum
+{
     COLTYPE_INT,
     COLTYPE_VARCHAR,
 } ColumnType;
 
-typedef struct {
+typedef struct
+{
     char *name;
     ColumnType type;
     int type_length; // -1 for INT, others for varchar
 } ColumnDef;
 
-typedef enum {
+typedef enum
+{
+    STMT_SELECT,
     STMT_BEGIN,
     STMT_COMMIT,
+    STMT_ROLLBACK,
 } StatementType;
 
-typedef struct {
+typedef struct
+{
     Token **tokens;
     size_t count;
     size_t pos;
 } Parser;
 
-typedef struct {
+typedef struct
+{
     char **columns;
     size_t column_count;
     char *table_name;
 } SelectStatement;
 
-typedef struct {
+typedef struct
+{
     char **columns;
     size_t column_count;
     char *table_name;
@@ -53,13 +64,15 @@ typedef struct {
     size_t value_count;
 } InsertStatement;
 
-typedef struct {
+typedef struct
+{
     char *table_name;
     ColumnDef *columns;
     size_t column_count;
 } CreateStatement;
 
-typedef struct {
+typedef struct
+{
     StatementType type;
 } ControlStatement;
 
@@ -72,5 +85,6 @@ void free_select_statement(SelectStatement *stmt);
 void free_insert_statement(InsertStatement *stmt);
 void free_create_statement(CreateStatement *stmt);
 void parse_tokens(Token **tokens, size_t count);
+void *parse_tokens_with_type(Token **token_streams, size_t token_count, int *out_stmt_type);
 
 #endif
