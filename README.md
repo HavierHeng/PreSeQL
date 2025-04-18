@@ -2,7 +2,9 @@
 
 PreSeQL (`.pseql`) is an embedded database based on a B+ Tree, inspired by SQLite. It has pretty poor support for the full SQL language spec (not even SQL89) and we'll proudly admit so. Written in C so you know its good.
 
-Simplifications are made for the interest of time. Such as supporting way less types in the database (minimum `TEXT` type), a smaller subset of the SQL language of our choosing, and only supporting UNIX and UNIX-like platforms. Relations between tables are also optional features as that requires `JOIN` via a Join table with Primary and Foreign keys.
+Simplifications are made for the interest of time. Such as supporting way less types in the database (`TEXT` and `INT` type), a smaller subset of the SQL language of our choosing, and only supporting UNIX and UNIX-like platforms. 
+
+Relations between tables are also optional features as that requires `JOIN` via a Join table with Primary and Foreign keys.
 
 ## Architecture
 
@@ -24,9 +26,11 @@ In summary the project consists of the following parts:
 - (Backend) Data Structure - B+ Tree
     - Where entries are actually stored for quick access
 - (Backend) Pager/Serializer
-    - Writes to disk from memory in a format of our choosing
-    - In the simplest implementation, writes to disk only on commit/transaction end
+    - Writes to disk in pages in a format of our choosing
     - In a more complex implementation, disk-backed and page management for data that may be stored either on disk or in memory
+- (Backend) Journal
+    - Logs original data of pages in a separate journal file on a transaction entry.
+    - Allows for rollback by copying original pages back over the modified dirty pages.
 - (Backend) OS Interface
     - For the reason of simplicity, only POSIX and UNIX-like OS abstractions and syscalls are used, i.e Linux and MacOS, Windows with its Win32 interface is ignored
     - Assume no file system issues given locking may differ from in different platform filesystem
@@ -54,4 +58,19 @@ For some quality of life features that might be explored:
 
 Of course not. Nothing is compatible, from the client down to the OPCodes and the file format. We implement only a subset of the project in any matter we deem fit.
 
+
+## Why not just use a flat 2D table - e.g CSV?
+There are several problems of a flat table backend:
+1) Page Alignment for disk is not respected - extra I/O operations and write amplification; kernel can only modify by pages as the smallest disk unit
+    - B+ Tree: All nodes in a B+ Tree are page aligned, therefore, accessing a node (which contains rows of data) is only one I/O operation. Inserting and deleting a record only affects at most 1 leaf data page at a time on average (if no rebalancing or splitting occurs).
+    - Flat table: Read the whole file into RAM, then do slow repeated linear scans. Once finished, copy back into RAM. This causes a lot of write amplification on the physical disk, as having a huge sequential data array means a lot of pages will be affected at once.
+2) Efficiency issues in lookup 
+    - B+ Tree: always a logarithmic time lookup O(logn), as its a tree, its only affected by its height. Linear scans are even faster due to a right sibling pointer between links, which lets us pull off range scans quickly.
+    - Flat table: Full scan everytime. Cannot jump to right record without an index (e.g hash table). 
+3) Efficiency issues in insertion
+    - B+ Tree: Acts a bit like a linked list, it doesn't matter which page number you put nodes since the B+ Tree points to each other anyways. This insertion always results in a sorted order.
+    - Flat table: If any data is inserted, this would mean shifting all rows back to slot in data. 
+4) Extensibility reasons - Secondary indexes (and even non B+ Tree indexes)
+    - B+ Tree: Build another tree for secondary index based on the column you want to sort by. Use the same data, so you can just point to the page where the data resides. Say if I even want to add a hash-table index, I can since the B+ Tree Nodes are just pages with metadata, these metadata can work across Index types or with minor modifications work with them.
+    - Flat table: Nah, no easy means of fast secondary access other than a hash table
 
