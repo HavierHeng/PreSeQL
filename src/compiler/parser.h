@@ -2,7 +2,7 @@
 #define PARSER_H
 
 #include <stdio.h>
-#include "./tokenizer.h"
+#include "tokenizer.h"
 
 typedef enum {
     VALUE_TEXT,
