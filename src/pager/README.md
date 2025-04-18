@@ -1,30 +1,38 @@
+# Database - Disk and in-memory representations differences
+
+When dealing with database files, it is important to distinguish between on-disk and in-memory representations.
+
+For the most part, due to `mmap()` the on-disk representations are exactly the same as the in-memory mapped version of the file.
+
+When dealing with disk representations of a database, there are some good rules to follow in the code:
+1) it is important to ensure that all data are statically sized (e.g arrays have a fixed upper bound on sizes set in DEFINE). This is used a lot when defining header sizes.
+2) It is also important to be careful to sync the changes to the disk using `fsync()` and `msync()`, failure to do so might result in unsaved changes to the file.
+3) Be conscious of page alignment which is determined by the OS. It is generally 4096 bytes. This is as not aligning to 4KB will result in unnecessary I/O even if it exceeds by 1 byte. Hence, a lot of parts of the code, intentionally pad the headers until they fit in 4KB even if it appears to be wasted space. This is also limits how much stuff we can store in the header in practice.
+
+Due to the 3rd limitation, header metadata in disk usually has to try to keep within the 4KB limit. Even if it means that the representation is not as optimal for searching or querying. Hence, usually when the VM boots up, it loads in the compact disk format (e.g a free page list) and puts it into memory where it can be as large as it wants without I/O penalty (e.g a Radix Tree which might be 10-20MB in practice, but up to a few GB in worst case).
+
 # Database file disk file format
 
 The pages at the back of the database file can grow dynamically in count.
 
 A page is determined by the OS kernel, but is normally 4096 bytes or 8192 bytes. We keep within this page limit as it minimizes I/O (1 I/O operation per page retrieval) since the page is the smallest unit that can be retrieved from disk. 
 
-Breaking the page alignment will cause unnecessary I/O operations. Hence all pages are intentionally padded to 4096 bytes even if its not used. A page has to be strictly aligned.
+Breaking the page alignment will cause unnecessary I/O operations, as well as write amplification (possibly leading to unnecessary disk wear). Hence all pages are intentionally padded to 4096 bytes even if its not used. A page has to be strictly aligned.
 
 ```
-[ Page 0 ]
-  └─ Magic number, Page size, Version
-  └─ Roots of special system catalogs tables (page 1-4 )
+[ Page 0 ] Header Metadata - Stores magic number, versioning and roots of various tables - acts as a boot sector
 
-[ Page 1 ] - track each table, its names and its root page
-  └─ Table catalog (B+ Tree Root page): table_id, table name, root page, schema ID, flags (hidden/system)
+[ Page 1 ] Table Catalog (B+ Tree Root Page) - track each Index Page for each table, its names and its root page and Index type
 
-[ Page 2 ] - track columns for each table
-  └─ Column catalog (B+ Tree Root Page): table_id, column_name, type, order
+[ Page 2 ] Column Catalog (B+ Tree Root Page) - track column schema for each table
 
-[ Page 3 ] - track FK relations
-  └─ Foreign Key catalog (B+ Tree Root Page): table_id, column_name, type, order
+[ Page 3 ] Foreign Key Catalog - track Foreign Key Constraints between table to table
   
 [ Page 4..X ]
   └─ Table Data Pages (slotted page implementation) - stores the actual data
   └─ Index Pages (B+ trees) - Internal nodes, and leaf nodes which point to data (or other nodes)
-  └─ Overflow Pages - for big INTEGER and TEXT that do not fit
-  └─ Free Pages - holes in pages created after deletion of pages (a bitmap/radix tree in the Page 0 header keeps track of what pages are free for reuse - to fill in holes)
+  └─ Overflow Pages - for big INTEGER and TEXT that do not fit within a page
+  └─ Free Pages - Pages marked as freed in database file, these are holes created after deletion of pages (a bitmap in the Page 0 header on disk keeps track of what pages are free for reuse - to fill in holes)
 ```
 
 # Header of database
