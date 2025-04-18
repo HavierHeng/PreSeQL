@@ -1,5 +1,6 @@
+// radix_tree.c
 #include "radix_tree.h"
-
+#include <stdbool.h>
 
 /* TODO:
  * Radix Tree Operations I need to implement
@@ -14,11 +15,11 @@
  * Extra stuff 2: Radix Tree is to use the arena_allocator in ../allocator/arena.h - this is just due to the size of the radix tree
 */ 
 
-
 // Helper function for internal use on Radix Nodes
-static void radix_insert(RadixNode *root, uint32_t page_num, int32_t slot) {
+// Uses 4 levels with 4 bits each for 16-bit page numbers
+static void radix_insert(RadixNode *root, uint16_t page_num, int16_t slot) {
     for (int level = 0; level < 4; ++level) {
-        int idx = (page_num >> ((3 - level) * RADIX_BITS)) & 0xFF;
+        int idx = (page_num >> ((3 - level) * RADIX_BITS)) & (RADIX_SIZE - 1);
         if (!root->children[idx]) {
             root->children[idx] = (RadixNode *)calloc(1, sizeof(RadixNode));
         }
@@ -27,11 +28,10 @@ static void radix_insert(RadixNode *root, uint32_t page_num, int32_t slot) {
     root->status = slot;
 }
 
-
 // Helper function for internal use on Radix Nodes
-static int32_t radix_lookup(RadixNode *root, uint32_t page_num) {
+static int16_t radix_lookup(RadixNode *root, uint16_t page_num) {
     for (int level = 0; level < 4; ++level) {
-        int idx = (page_num >> ((3 - level) * RADIX_BITS)) & 0xFF;
+        int idx = (page_num >> ((3 - level) * RADIX_BITS)) & (RADIX_SIZE - 1);
         if (!root->children[idx]) return -1;
         root = root->children[idx];
     }
@@ -39,7 +39,7 @@ static int32_t radix_lookup(RadixNode *root, uint32_t page_num) {
 }
 
 // Walk through radix tree and perform callback (e.g update free status)
-static void walk_radix(RadixNode *node, uint32_t prefix, int depth, void (*cb)(uint32_t page, int slot)) {
+static void walk_radix(RadixNode *node, uint16_t prefix, int depth, void (*cb)(uint16_t page, int16_t slot)) {
     if (!node) return;
 
     if (depth == 4) {
@@ -55,12 +55,6 @@ static void walk_radix(RadixNode *node, uint32_t prefix, int depth, void (*cb)(u
         }
     }
 }
-/*
-// e.g free callback to make journal page freed to be used in walk()
-void free_slot_callback(uint32_t page, int slot) {
-    free_list.free_slots[free_list.count++] = slot;
-}
-*/
 
 // Public API implementations that match the header declarations
 RadixTree* radix_tree_create() {
@@ -90,16 +84,16 @@ void radix_tree_destroy(RadixTree* tree) {
     free(tree);
 }
 
-void radix_tree_insert(RadixTree *tree, uint32_t page_no, int32_t slot) {
+void radix_tree_insert(RadixTree *tree, uint16_t page_no, int16_t slot) {
     radix_insert(&tree->root, page_no, slot);
 }
 
-void radix_tree_delete(RadixTree *tree, uint32_t page_no) {
+void radix_tree_delete(RadixTree *tree, uint16_t page_no) {
     RadixNode* root = &tree->root;
     
     // Navigate to the leaf
     for (int level = 0; level < 4; ++level) {
-        int idx = (page_no >> ((3 - level) * RADIX_BITS)) & 0xFF;
+        int idx = (page_no >> ((3 - level) * RADIX_BITS)) & (RADIX_SIZE - 1);
         if (!root->children[idx]) return; // Page not found
         root = root->children[idx];
     }
@@ -108,8 +102,8 @@ void radix_tree_delete(RadixTree *tree, uint32_t page_no) {
     root->status = -1;
 }
 
-int32_t radix_tree_pop_min(RadixTree *tree) {
-    uint32_t page_num = 0;
+int16_t radix_tree_pop_min(RadixTree *tree) {
+    uint16_t page_num = 0;
     RadixNode* root = &tree->root;
     
     // Navigate to the leftmost leaf with status != -1
@@ -126,7 +120,7 @@ int32_t radix_tree_pop_min(RadixTree *tree) {
         if (!found) return -1; // No free pages
     }
     
-    int32_t slot = root->status;
+    int16_t slot = root->status;
     if (slot == -1) {
         // This leaf doesn't represent a free page
         return -1;
@@ -139,32 +133,31 @@ int32_t radix_tree_pop_min(RadixTree *tree) {
     return page_num;
 }
 
-int32_t radix_tree_lookup(RadixTree *tree, uint32_t page_no) {
+int16_t radix_tree_lookup(RadixTree *tree, uint16_t page_no) {
     return radix_lookup(&tree->root, page_no);
 }
 
-void radix_tree_walk(RadixNode *node, uint32_t prefix, int depth, void (*cb)(uint32_t page, int slot)) {
-    walk_radix(node, prefix, depth, cb);
+void radix_tree_walk(RadixTree *tree, void (*cb)(uint16_t page, int16_t slot)) {
+    walk_radix(&tree->root, 0, 0, cb);
 }
 
 // Convert from freelist to radix tree
-void freelist_to_radix(RadixTree* tree, uint32_t* freelist, size_t count) {
+void freelist_to_radix(RadixTree* tree, uint16_t* freelist, size_t count) {
     for (size_t i = 0; i < count; i++) {
         radix_tree_insert(tree, freelist[i], i); // Using index as slot
     }
 }
 
 // Convert from radix tree to freelist
-size_t radix_to_freelist(RadixTree* tree, uint32_t* freelist, size_t max_size) {
+size_t radix_to_freelist(RadixTree* tree, uint16_t* freelist, size_t max_size) {
     size_t count = 0;
     
-    void collect_free_pages(uint32_t page, int slot) {
+    void collect_free_pages(uint16_t page, int16_t slot) {
         if (count < max_size) {
             freelist[count++] = page;
         }
     }
     
-    radix_tree_walk(&tree->root, 0, 0, collect_free_pages);
+    radix_tree_walk(tree, collect_free_pages);
     return count;
 }
-
