@@ -1,4 +1,3 @@
 /*
-* [ Page 3 ] - track FK relations
-  └─ Foreign Key catalog (B+ Tree Root Page): table_id, column_name, type, order
+[ Page 3 ] Foreign Key Catalog - track Foreign Key Constraints between table to table
 */
