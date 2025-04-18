@@ -22,6 +22,7 @@ typedef struct RadixTree {
 } RadixTree;
 
 RadixTree* radix_tree_create();
+void radix_tree_destroy(RadixTree* tree);
 
 // Basic Radix Tree operations
 void radix_tree_insert(RadixTree *tree, uint32_t page_no, int32_t slot);
@@ -31,3 +32,7 @@ int32_t radix_tree_lookup(RadixTree *tree, uint32_t page_no);
 
 // Walk while executing callback function - e.g free
 void radix_tree_walk(RadixNode *node, uint32_t prefix, int depth, void (*cb)(uint32_t page, int slot));
+
+// Conversion between freelist and radix tree
+void freelist_to_radix(RadixTree* tree, uint32_t* freelist, size_t count);
+size_t radix_to_freelist(RadixTree* tree, uint32_t* freelist, size_t max_size);
