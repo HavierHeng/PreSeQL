@@ -20,15 +20,27 @@ Breaking the page alignment will cause unnecessary I/O operations. Hence all pag
 [ Page 3 ] - track FK relations
   └─ Foreign Key catalog (B+ Tree Root Page): table_id, column_name, type, order
   
-[ Page 4 ] - support multiple index types, and track root pages for each table
-  └─ Index catalog (B+ Tree Index Roots): table_id, index_name, root_page, type (B+ or hash)
-
-[ Page 5..X ]
+[ Page 4..X ]
   └─ Table Data Pages (slotted page implementation) - stores the actual data
   └─ Index Pages (B+ trees) - Internal nodes, and leaf nodes which point to data (or other nodes)
   └─ Overflow Pages - for big INTEGER and TEXT that do not fit
   └─ Free Pages - holes in pages created after deletion of pages (a bitmap/radix tree in the Page 0 header keeps track of what pages are free for reuse - to fill in holes)
 ```
+
+# Header of database
+Stores metadata about the database. These are the choosen things to be stored inside. It is stored in fixed position of Page 0 - almost like a boot sector for the database.
+
+| Field                   | Purpose                                                                           |
+| ----------------------- | --------------------------------------------------------------------------------- |
+| Magic number            | File format/version check (`SQLShite` in ASCII)                                                         |
+| Page size               | 4KB or 8KB, etc - used as debug info to know how to load the files later in pager |
+| DB version              | Schema versioning or migrations                                                   |
+| Root pointers           | To special system catalog tables/indexes                                          |
+| Number of tables        | For iterating                                                                     |
+| Free page list | Space management for reusing freed pages |
+| Transaction state       | For WAL / crash recovery                                                          |
+| Optional flags          | E.g., read-only mode, corruption checks, compression                              |
+| Checksum                | Data corruption and recovery                                                      |
 
 # Special Catalog Tables 
 
@@ -139,5 +151,5 @@ There are ways to make secondary indexes:
 - Built via `UNIQUE` keyword during `CREATE TABLE` : e.g ` CREATE TABLE Persons ( PersonID INTEGER, Email TEXT UNIQUE);`
 
 Making an secondary index basically initializes a whole new B+ Tree on the disk which costs more memory space, but buys back time in the long run. However, interally, as data is added, then its effectively inserted into all B-Tree indexes that are affected by the added data (its more costly on time).
-
+- Internally building a secondary index off the primary index will cause it to point to the same data pages. The data page is not marked as freed until all indexes stop referencing it (tracked by a reference counter in the header)
 
