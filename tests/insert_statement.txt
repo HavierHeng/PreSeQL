@@ -1,3 +1,4 @@
 BEGIN TRANSACTION;
     INSERT INTO employees (id, name, age, department) VALUES (1, 'Alice', 30, 'HR');
+    INSERT INTO employees VALUES (1, 'Alice', 30, 'HR');  // Number of values must be equal to total number of columns
 COMMIT;
