@@ -60,14 +60,13 @@ void mark_page_used(uint32_t page_no) {
     radix_tree_delete(free_page_map, page_no);
 }
 
-// Get a free page number, or return -1 if none
+// Get a free page number, or return -1 if none 
+// if no free page then use the highest known page number + 1 (stored in page header)
 int32_t get_free_page() {
-    return radix_tree_first_key(free_page_map); // Fastest available
+    return radix_tree_pop_min(free_page_map); // Fastest available
 }
 
-
-// Page Allocation & Initialization
-
+/* Page Allocation & Initialization */
 Page* allocate_page(uint32_t page_no, PageType type) {
     Page* page = (Page*)malloc(sizeof(Page));
     memset(page, 0, sizeof(Page));
@@ -101,14 +100,34 @@ Page* allocate_page(uint32_t page_no, PageType type) {
     return page;
 }
 
+// TODO: free page is not needed to free() due to mmap - all i have to do is mark it as such and add it to the radix tree for tracking
+/*
 void free_page(Page* page, uint32_t page_no) {
     mark_page_free(page_no);
     free(page);
 }
+*/
 
 
-// -- Specialized Init Helpers --
+// Specialized Init Helpers for B+ Tree indexes and pages
 
+/* TODO:
+* B+ Tree operations:
+* 1) init/destroy - to create and clean up B+ Tree nodes - implicitly part of init data page (a page is a node) - so maybe no need make - probs just need to implement a Radix tree way to find either a freed page or fallback to highest page ID + 1 (stored in header as metadata)
+* 2) btree_search() - to find entry
+* 3) btree_insert() - to add new rows to the B+ Tree index
+* 4) btree_split_leaf() - when leaf is too full, we have to split it. This also sets up the right sibling pointers that B+ Tree is known for fast linear access.
+* 5) btree_split_interal() - when internal is too small. Its a separate function just due to how internal nodes are routers instead of data pointers.
+* 6) btree_iterator_range() - returns a BTreeIterator (or something similar in idea, name needs to be more consistent), allowing me to get range of values
+* 7) Row* btree_iterator_next(BPlusIterator *it) - steps through the iterator and returns the row stored
+* 8) btree_delete() - to delete entries. This is optional because of the complexity to rebalance the tree after operations, but might be useful. Also when entries are deleted, this also updates some reference counter, updates the free page radix tree and so on. Its a cascade effect.
+*/
+
+
+/* TODO:
+ * Data operations:
+ * 1) In reality, due to overflow pages, pulling out data is harder than it sounds. it might require the following of a linked list style overflow page. Overflow pages themselves also have chunks, i.e multiple data pages might store chunks of their data inside an overflow page. So you need to way to follow through each overflow page
+*/
 Page* init_data_page(uint32_t page_no) {
     return allocate_page(page_no, DATA);
 }
