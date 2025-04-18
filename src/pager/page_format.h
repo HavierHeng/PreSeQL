@@ -1,9 +1,14 @@
-/* Define page structures and headers format */
+/* 
+ * Collate page structures and headers format 
+ * */
 
 #include <stdint.h>
 #include <stdlib.h>
 #include <string.h>
 #include <assert.h>
+#include "data_page.h"
+#include "overflow_page.h"
+#include "index_page.h"
 
 #define PAGE_SIZE 4096
 #define JOURNAL_META_SIZE 12 // Journal header: txn_id, page_no, etc.
@@ -15,33 +20,6 @@ typedef enum {
     OVERFLOW
 } PageType;
 
-typedef enum {
-    BTREE_ROOT = 1,
-    BTREE_INTERIOR,
-    BTREE_LEAF
-} BTreePageType;
-
-// TODO : all B+ Tree Leafs are linked in order of the primary key to allow linear traversal - so there should be a next pointer to another B+ Tree Leaf
-typedef struct {
-    uint32_t page_id;
-    BTreePageType btree_type;
-    uint16_t free_start;
-    uint16_t free_end;
-    uint16_t total_free;
-    uint8_t flags;
-} BTreePageHeader;
-
-typedef struct {
-    uint16_t num_slots;
-    uint16_t slot_directory_offset;
-} DataPageHeader;
-
-typedef struct {
-    uint32_t next_overflow_page;
-    uint16_t payload_size;
-    uint16_t reserved;
-} OverflowPageHeader;
-
 // Header different for each of 3 Page types 
 typedef union {
     BTreePageHeader btree;
@@ -51,17 +29,18 @@ typedef union {
 
 // Generic Page Header
 typedef struct {
+    uint16_t page_id;  // Max of 2^16 = 65535 pages
     uint8_t dirty;
     uint8_t free;
     PageType type;
-    PageTypeHeader type_specific;
+    PageTypeHeader type_specific;  // TODO: These have to be padded to same size in each implementation 
 } PageHeader;
-
 
 // Page Memory, aligned to PAGE_SIZE (4KB usually) 
 // The usable space is further capped to prevent journal from exceeding PAGE_SIZE
+// TODO: This is given me a warning that header is variable sized. Though i thought it would be aligned to the largest member
 typedef struct {
     PageHeader header;
-    uint8_t payload[MAX_DATA_BYTES];  // Slotted page or B+ nodes
+    uint8_t payload[MAX_DATA_BYTES];  // Slotted page for B+ nodes rows
 } Page;
 

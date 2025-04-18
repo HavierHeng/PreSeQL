@@ -1,5 +1,4 @@
 /* Aka the serializer, but also handles read/writes to disk 
-* This is also where the B-Tree is handled - since its nodes are tied to pages on disk
 
 [ Page 0 ]
   └─ Magic number, Page size, Version
@@ -38,7 +37,6 @@
 #include <sys/stat.h>  // Handle structs of data by stat() functions
 #include "page_format.h"
 #include "../algorithm/radix_tree.h"  // For efficiently finding free pages
-#include "status.h"
 
 
 // Max keys per B+ Tree node - i.e max number of children a node can have - i.e fanout
@@ -46,6 +44,89 @@
 #define ORDER 256
 
 /* Manage Free Pages via Radix Tree */
+RadixTree* free_page_map;  // You initialize this somewhere in DB init
 
+void init_free_page_map() {
+    free_page_map = radix_tree_create();
+}
+
+// Mark a page number as free
+void mark_page_free(uint32_t page_no) {
+    radix_tree_insert(free_page_map, page_no, (void*)1);
+}
+
+// Mark a page number as allocated
+void mark_page_used(uint32_t page_no) {
+    radix_tree_delete(free_page_map, page_no);
+}
+
+// Get a free page number, or return -1 if none
+int32_t get_free_page() {
+    return radix_tree_first_key(free_page_map); // Fastest available
+}
+
+
+// Page Allocation & Initialization
+
+Page* allocate_page(uint32_t page_no, PageType type) {
+    Page* page = (Page*)malloc(sizeof(Page));
+    memset(page, 0, sizeof(Page));
+
+    page->header.dirty = 1;
+    page->header.free = 0;
+    page->header.type = type;
+
+    switch (type) {
+        case DATA:
+            page->header.type_specific.data.num_slots = 0;
+            page->header.type_specific.data.slot_directory_offset = 0;
+            break;
+
+        case INDEX:
+            page->header.type_specific.btree.page_id = page_no;
+            page->header.type_specific.btree.btree_type = BTREE_LEAF; // default
+            page->header.type_specific.btree.free_start = sizeof(PageHeader);
+            page->header.type_specific.btree.free_end = MAX_DATA_BYTES; // <= 👈 IMPORTANT!
+            page->header.type_specific.btree.total_free = MAX_DATA_BYTES - sizeof(PageHeader);
+            page->header.type_specific.btree.flags = 0;
+            break;
+
+        case OVERFLOW:
+            page->header.type_specific.overflow.next_overflow_page = 0;
+            page->header.type_specific.overflow.payload_size = 0;
+            break;
+    }
+
+    mark_page_used(page_no);
+    return page;
+}
+
+void free_page(Page* page, uint32_t page_no) {
+    mark_page_free(page_no);
+    free(page);
+}
+
+
+// -- Specialized Init Helpers --
+
+Page* init_data_page(uint32_t page_no) {
+    return allocate_page(page_no, DATA);
+}
+
+Page* init_btree_leaf(uint32_t page_no) {
+    Page* page = allocate_page(page_no, INDEX);
+    page->header.type_specific.btree.btree_type = BTREE_LEAF;
+    return page;
+}
+
+Page* init_btree_root(uint32_t page_no) {
+    Page* page = allocate_page(page_no, INDEX);
+    page->header.type_specific.btree.btree_type = BTREE_ROOT;
+    return page;
+}
+
+Page* init_overflow_page(uint32_t page_no) {
+    return allocate_page(page_no, OVERFLOW);
+}
 
 #endif
