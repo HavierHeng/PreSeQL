@@ -12,6 +12,9 @@
 typedef struct PSqlCursor Cursor;
 typedef int PSqlRegister;  // Using int as the register type for simplicity
 
+//TODO: PSqlStatement to be arena allocated as well - just like radix tree
+
+
 // The VM state is effectively stored into PSqlStatement
 // The statement is the VM state in and of itself
 // Rather than just a bundle of instructions
