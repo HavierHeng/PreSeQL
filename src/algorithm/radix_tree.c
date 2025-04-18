@@ -39,6 +39,7 @@ void walk_radix(RadixNode *node, uint32_t prefix, int depth, void (*cb)(uint32_t
     }
 }
 
+// TODO:
 /*
 // e.g free callback to make journal page freed
 void free_slot_callback(uint32_t page, int slot) {

@@ -6,9 +6,9 @@
 #include <stdlib.h>
 #include <string.h>
 #include <assert.h>
-#include "data_page.h"
-#include "overflow_page.h"
-#include "index_page.h"
+#include "data/page.h"
+#include "overflow/page.h"
+#include "index/page.h"
 
 #define PAGE_SIZE 4096
 #define JOURNAL_META_SIZE 12 // Journal header: txn_id, page_no, etc.
