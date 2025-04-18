@@ -1,9 +1,10 @@
 # Database file disk file format
 
-The pages at the back of the database file can grow dynamically. 
+The pages at the back of the database file can grow dynamically in count.
 
-A page is determined by the OS kernel, but is normally 4096 bytes or 8192 bytes. We keep within this page limit as it minimizes I/O since the page is the smallest unit that can be retrieved from disk.
+A page is determined by the OS kernel, but is normally 4096 bytes or 8192 bytes. We keep within this page limit as it minimizes I/O (1 I/O operation per page retrieval) since the page is the smallest unit that can be retrieved from disk. 
 
+Breaking the page alignment will cause unnecessary I/O operations. Hence all pages are intentionally padded to 4096 bytes even if its not used. A page has to be strictly aligned.
 
 ```
 [ Page 0 ]
@@ -124,4 +125,19 @@ Hence for tracking free pages:
 For tracking free slots per page:
 - Disk: Bitmap - Bitmap is medium sized. 1 bit per free slot - so 255 bits for max of 255 slots per page
 - In memory: Bitmap - Linear scan does not take too long with so little entries
+
+## Primary and secondary indexes
+
+While building a table, if the Primary key is not specified, an implicit ID field is added to sort the data by. This is not optimal for retrieving data fast as it involves a full walk of the B+ Tree.
+
+It is recommended to always specify a PRIMARY KEY. 
+- For INTEGER types as PRIMARY KEY, this is sorted by its value 
+- For TEXT types as PRIMARY KEY, this is sorted by lexicographic order (`strcmp()`)
+
+There are ways to make secondary indexes:
+- Built explicitly via `CREATE INDEX idx_users_email on users(email);`
+- Built via `UNIQUE` keyword during `CREATE TABLE` : e.g ` CREATE TABLE Persons ( PersonID INTEGER, Email TEXT UNIQUE);`
+
+Making an secondary index basically initializes a whole new B+ Tree on the disk which costs more memory space, but buys back time in the long run. However, interally, as data is added, then its effectively inserted into all B-Tree indexes that are affected by the added data (its more costly on time).
+
 
