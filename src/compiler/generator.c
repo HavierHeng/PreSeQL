@@ -98,6 +98,10 @@ void generate_control(CompiledProgram *program, ControlStatement *stmt)
     {
         emit_instruction(program, OP_COMMIT, 0, 0, NULL);
     }
+    else if (stmt->type == STMT_ROLLBACK)
+    {
+        emit_instruction(program, OP_ROLLBACK, 0, 0, NULL);
+    }
 
     // Halt execution
     emit_instruction(program, OP_HALT, 0, 0, NULL);
@@ -117,6 +121,7 @@ CompiledProgram *generate_code(void *stmt, int stmt_type)
         break;
     case STMT_BEGIN:
     case STMT_COMMIT:
+    case STMT_ROLLBACK:
         generate_control(program, (ControlStatement *)stmt);
         break;
     default:
