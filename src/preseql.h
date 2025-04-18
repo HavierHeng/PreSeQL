@@ -5,8 +5,8 @@
 #include "status/db.h"
 #include "status/step.h"
 #include "types/psql_types.h"
-#include "virtual_machine/opcodes.h"
-#include "virtual_machine/vm.h"
+#include "vm_engine/opcodes.h"
+#include "vm_engine/vm.h"
 
 /* Database handle structure */
 typedef struct PSqlDB {
