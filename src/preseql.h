@@ -23,6 +23,9 @@ PSqlStatus psql_close(PSql* db);
 /* Frontend to PreSeQL: Lexer, Parser, Code Generator steps */
 PSqlStatus psql_prepare(PSqlStatement* stmt, char*);
 
+/* Clean up VM state, but do not clear instructions inside it - i.e rewind */
+PSqlStatus psql_reset(PSqlStatement* stmt);
+
 /* Clean up VM state and all instructions inside it */
 PSqlStatus psql_finalize(PSqlStatement* stmt);
 
