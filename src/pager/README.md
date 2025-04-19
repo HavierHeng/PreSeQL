@@ -28,14 +28,20 @@ When a new database is opened,
 1) If file exists and is_valid (via CRC32 checksum): `mmap()` into a specific memory location in virtual memory. This gives us a `(void *)` ptr to the "start" of the file. Can immediately do operations on DB.
 2) If the file is empty: Then follow following steps:
 3) Create Page 0 Base Header - This is one page only
-4) Create Page 1-3 Special Catalog Tables (Table, Column, Foreign Key) - These are B+ Tree Indexes with their own hardcoded data sorted by id
-5) Hand over control to VM engine
+4) Bootstrap and Create Page 1-3 Special Catalog Tables (Table, Column, Foreign Key) - These are B+ Tree Indexes with their own hardcoded data sorted by `id` as primary key
+5) Create secondary indexes for the speical catalog tables 
+    - Table Catalog: `table_name` - for name resolution
+    - Column Catalog: `column_name` - for reolving columns IDs by name
+    - Foreign Key Catalog: 
+        - `from_table` - When inserting/updating a row in a referencing table, you check if the FK constraint is satisfied.
+        - `to_table` - When deleting/updating a referenced row, you look up what child tables are affected.
+6) Hand over control to VM engine
 
 
 If Journal is implemented, on database opening:
 1) `mmap()` file - Create a blank journal file with only the header metadata. This serves as a blank canvas for any transactions later on.
 2) If transaction happens via `BEGIN TRANSACTIONS`: Create the necessary copies of the pages into Journal. This is handled by VM.
-3) If transaction number returned by the VM is not continguous with the highest transaction number seen by the journal - this invalidate the whole journal. Journal is cleared and reinitialized.
+3) If transaction number returned by the VM is not continguous with the highest transaction number seen by the journal - this invalidate the current journalentries. Journal is cleared and reinitialized (either immediately or batched).
 
 # Database - Disk and in-memory representations differences
 

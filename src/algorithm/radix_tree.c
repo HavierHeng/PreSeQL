@@ -5,10 +5,6 @@
 /* TODO:
  * Radix Tree Operations I need to implement
  * 1) Freelist -> Radix Tree conversion - from disk representation of freelist to memory representation as radix tree - free list is capped at some fixed size in the Header
- * 2) Radix Tree -> Free - for saving changes back to ddisk ovcasionally - the number of changes before saving is set by a BATCH_SIZE variable
- * 3) Insert - e.g when page is deleted, i need to add a new page to be tracked
- * 4) Delete - e.g when page is reused, i need to delete it from radix tree
- * 5) Walk - if i cannot find the free value, then I simply do a linear search by walking. Alternatively, since i likely track the highest page being used in my page header and journal header, i can just use this for something else
  * 6) Pop min/find first - Obviously to get the lowest free page available for journal/allocating as data/index/overflow page
  * 7) init and destroy radix tree - for setup and cleanup
  * Extra stuff: There is a struct for RadixTree which contains a pointer to the root RadixNode, that is not implemented
@@ -19,6 +15,7 @@
 
 // Helper function for internal use on Radix Nodes
 // Uses 4 levels with 4 bits each for 16-bit page numbers
+// Insert e.g when page is deleted, addition of a new page to be tracked
 static void radix_insert(RadixNode *root, uint16_t page_num, int16_t slot) {
     for (int level = 0; level < 4; ++level) {
         int idx = (page_num >> ((3 - level) * RADIX_BITS)) & (RADIX_SIZE - 1);
@@ -74,6 +71,7 @@ void radix_tree_insert(RadixTree *tree, uint16_t page_no, int16_t slot) {
     radix_insert(&tree->root, page_no, slot);
 }
 
+// Delete e.g when page is reused, deletion of entry from radix tree
 void radix_tree_delete(RadixTree *tree, uint16_t page_no) {
     RadixNode* root = &tree->root;
     
@@ -123,7 +121,7 @@ int16_t radix_tree_lookup(RadixTree *tree, uint16_t page_no) {
     return radix_lookup(&tree->root, page_no);
 }
 
-// Recursive function - Walk through radix tree and perform callback (e.g update free status)
+// Recursive function - Walk through radix tree and perform callback (e.g update free status, and building freelist to serialization to disk)
 void walk_radix(RadixNode *node, uint16_t prefix, int depth, void (*cb)(uint16_t page, int16_t slot, void* user_data), void* user_data) {
     if (!node) return;
 
@@ -147,13 +145,6 @@ void walk_radix(RadixNode *node, uint16_t prefix, int depth, void (*cb)(uint16_t
 // Callback function operates on a page no. a slot and some user data that can be used to pass in some data
 void radix_tree_walk(RadixTree *tree, void (*cb)(uint16_t page, int16_t slot, void* user_data), void* user_data) {
     walk_radix(&tree->root, 0, 0, cb, user_data);
-}
-
-// Convert from freelist to radix tree
-void freelist_to_radix(RadixTree* tree, uint16_t* freelist, size_t count) {
-    for (size_t i = 0; i < count; i++) {
-        radix_tree_insert(tree, freelist[i], i); // Using index as slot
-    }
 }
 
 static void collect_free_pages(uint16_t page, int16_t slot, uint16_t* freelist, size_t* count, size_t max_size) {
@@ -189,3 +180,12 @@ size_t radix_to_freelist(RadixTree* tree, uint16_t* freelist, size_t max_size) {
     radix_tree_walk(tree, collect_adapter, &data);
     return count;
 }
+
+
+// Convert from freelist to radix tree
+void freelist_to_radix(RadixTree* tree, uint16_t* freelist, size_t count) {
+    for (size_t i = 0; i < count; i++) {
+        radix_tree_insert(tree, freelist[i], i); // Using index as slot
+    }
+}
+
