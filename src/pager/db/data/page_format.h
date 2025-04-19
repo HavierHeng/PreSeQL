@@ -4,11 +4,11 @@
  */
 
 #define MAX_DATA_SLOTS 256  // Max number of slots per data page
+#include "psql_types.h"  // For the base 3 types, NULL, PTR, TEXT, INT
 
 typedef struct {
     uint16_t num_slots;
     uint16_t slot_directory_offset;
     uint16_t reference_count;  // If secondary indexes are made, knowing no. of references to the data page will indicate when we can mark the page as free
+    uint8_t can_compact;  // flag to indicate vaccum of empty slots can be performed
 } DataPageHeader;
-
-

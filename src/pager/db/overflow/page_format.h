@@ -16,5 +16,9 @@ typedef struct {
     uint32_t next_overflow_page;
     OverflowChunkMeta chunk_table[MAX_OVERFLOW_CHUNKS];
     uint8_t data[];  // TODO: What size?
+    uint16_t reference_count;  /* To know if page can be marked as free. 
+                                Reference counters increase if a new data page points to it. 
+                                We know if a new data page references the overflow page 
+                                since there is only one point of time where an overflow page can get new entries, when data pages are overflowed */
 } OverflowPageHeader;
 

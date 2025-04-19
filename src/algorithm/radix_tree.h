@@ -2,7 +2,8 @@
 // This is used in a few parts of the code: 
 // 1) Finding Free pages in Pager - For Reuse of pages, to prevent fragmentation
 // 2) Free Pages in Journal if Transaction is used - For Reuse, such as when pages are dirty, we make a copy
-// This is as pages in the database can get huge in number, and is dynamic in count. This job cannot be handled by just a bitmap alone
+// This is as pages in the database can get huge in number, and is dynamic in count. 
+// This job to monitor freed pages cannot be handled by just a bitmap alone, while a free list is inefficient.
 
 #include <stdlib.h>
 #include <stdint.h>

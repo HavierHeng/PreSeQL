@@ -22,7 +22,7 @@ typedef enum {
 
     PSQL_STEP_MISUSE  /* VM engine was not reset 
     and instead psql_reset() was called again after PSQL_DONE was returned */
-} PsqlStepStatus;
+} PSqlStepStatus;
 
 
 #endif

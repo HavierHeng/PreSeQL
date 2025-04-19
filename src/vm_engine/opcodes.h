@@ -6,6 +6,9 @@
 /* Note - each OPCode also has its set of valid parameters behind which is not clear here */
 typedef enum
 {
+    /* Placeholder for unknown/unimplemented operations */
+    OP_NOP = 0,
+
     /* Table Operations */
     OP_CREATE_TABLE,  /* New B-Tree representing Table */
     OP_OPEN_TABLE,    /* Open existing table */
@@ -40,15 +43,14 @@ typedef enum
     OP_SORT,      /* Sort by order or ascending or descending */
     OP_SWAP_ROWS, /* Swap two rows and renumber index */
 
-    /* Virtual Table OPCodes*/
+    /* Virtual Table OPCodes - Debug info for nerds
+     * V-Table OPCodes are fake SQL tables emulated by the VM but not stored anywhere on disk.
+     * */
     OP_GET_SCHEMA,
     OP_GET_LOGS,
     OP_GET_BTREEINFO,
     OP_GET_DBPAGE,
-    OP_GET_MEMSET,
-
-    /* Placeholder for unknown/unimplemented operations */
-    OP_NOP
+    OP_GET_MEMSET
 } PSqlOpcode;
 
 typedef struct

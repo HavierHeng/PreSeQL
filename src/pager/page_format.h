@@ -6,13 +6,11 @@
 #include <stdlib.h>
 #include <string.h>
 #include <assert.h>
-#include "data/page.h"
-#include "overflow/page.h"
-#include "index/page.h"
+#include "db/base_db/page.h"
+#include "db/data/page.h"
+#include "db/overflow/page.h"
+#include "db/index/page.h"
 
-#define PAGE_SIZE 4096
-#define JOURNAL_META_SIZE 12 // Journal header: txn_id, page_no, etc.
-#define MAX_DATA_BYTES (PAGE_SIZE - JOURNAL_META_SIZE) // Limit usable bytes for data in data pages, since journal has some overhead itself, but we aim for page alignment
 
 typedef enum {
     DATA,
@@ -41,6 +39,6 @@ typedef struct {
 // TODO: This is given me a warning that header is variable sized. Though i thought it would be aligned to the largest member
 typedef struct {
     PageHeader header;
-    uint8_t payload[MAX_DATA_BYTES];  // Slotted page for B+ nodes rows
+    uint8_t data[MAX_DATA_BYTES];  // The things is data is depending on the page type 
 } Page;
 
