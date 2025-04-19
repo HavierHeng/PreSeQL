@@ -1,4 +1,4 @@
-// TODO: Add header guard
+#include "page.h"
 // Deal with insert row as slotted page - and account for overflow pages
 
 int insert_row(Page* page, const uint8_t* row_data, uint16_t row_size) {
@@ -48,6 +48,65 @@ int insert_row(Page* page, const uint8_t* row_data, uint16_t row_size) {
     return 0;
 }
 
+int vacuum_page(Page* page) {
+    if (!page) return -1;
+    
+    DataPageHeader* hdr = &page->header.type_specific.data;
+    if (!hdr->can_compact) return 0; // Nothing to vacuum
+    
+    // Temporary buffer to hold valid rows
+    uint8_t temp_buffer[MAX_DATA_BYTES];
+    uint16_t temp_slots[MAX_DATA_SLOTS];
+    uint16_t valid_count = 0;
+    
+    // Collect all valid rows
+    for (int i = 0; i < hdr->num_slots; i++) {
+        uint16_t* slot = (uint16_t*)(page->payload + sizeof(PageHeader) + i * sizeof(uint16_t));
+        if (*slot != SLOT_DELETED) {
+            uint16_t row_size;
+            uint8_t* row = get_row(page, i, &row_size);
+            
+            // Copy row to temp buffer
+            uint16_t new_offset = MAX_DATA_BYTES - row_size;
+            if (valid_count > 0) {
+                new_offset = temp_slots[valid_count - 1] - row_size;
+            }
+            
+            memcpy(temp_buffer + new_offset, row, row_size);
+            temp_slots[valid_count++] = new_offset;
+        }
+    }
+    
+    // Reset slot directory
+    memset(page->payload + sizeof(PageHeader), 0, hdr->num_slots * sizeof(uint16_t));
+    
+    // Copy back valid rows
+    uint16_t data_start = MAX_DATA_BYTES;
+    for (int i = 0; i < valid_count; i++) {
+        uint16_t row_size;
+        if (i < valid_count - 1) {
+            row_size = temp_slots[i] - temp_slots[i + 1];
+        } else {
+            row_size = MAX_DATA_BYTES - temp_slots[i];
+        }
+        
+        data_start -= row_size;
+        memcpy(page->payload + data_start, temp_buffer + temp_slots[i], row_size);
+        
+        // Update slot
+        uint16_t* slot = (uint16_t*)(page->payload + sizeof(PageHeader) + i * sizeof(uint16_t));
+        *slot = data_start;
+    }
+    
+    // Update header
+    hdr->num_slots = valid_count;
+    hdr->slot_directory_offset = data_start;
+    hdr->can_compact = 0;
+    page->header.dirty = 1;
+    
+    return 0;
+}
+
 
 int delete_row(Page* page, int slot_index) {
     DataPageHeader* hdr = &page->header.type_specific.data;
@@ -58,6 +117,7 @@ int delete_row(Page* page, int slot_index) {
     if (*slot == SLOT_DELETED) return -1;
 
     *slot = SLOT_DELETED;
+    hdr->can_compact = 1;  // Mark that page can be vacuumed
     page->header.dirty = 1;
     return 0;
 }

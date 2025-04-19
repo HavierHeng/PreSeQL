@@ -2,6 +2,7 @@
 
 /* Page Sizes - Check OS setting */
 #define PAGE_SIZE 4096
+#define MAX_PAGES 65535  /* 2^16 so all page counts are represented by uint_16 */
 
 /* Max Size of Page Headers in Bytes (regardless of type - pad if necessary) */
 #define JOURNAL_META_SIZE 12 /*  TODO: Update size based on final Journal header overhead: txn_id, page_no, etc. Can leave excess if it makes it rounded - e.g 64 bytes*/

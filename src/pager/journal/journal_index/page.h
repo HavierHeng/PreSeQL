@@ -1,1 +1,6 @@
-// TODO: Header guard and stuff
+#ifndef PRESEQL_PAGER_JOURNAL_INDEX_PAGE_H
+#define PRESEQL_PAGER_JOURNAL_INDEX_PAGE_H
+
+// Journal index page operations
+
+#endif /* PRESEQL_PAGER_JOURNAL_INDEX_PAGE_H */

@@ -2,15 +2,24 @@
  * Collate page structures and headers format 
  * */
 
+#ifndef PRESEQL_PAGER_DB_FORMAT_H
+#define PRESEQL_PAGER_DB_FORMAT_H
+
 #include <stdint.h>
 #include <stdlib.h>
 #include <string.h>
 #include <assert.h>
-#include "db/base_db/page.h"
-#include "db/data/page.h"
-#include "db/overflow/page.h"
-#include "db/index/page.h"
+#include "config.h"
 
+
+// Forward declarations
+typedef struct BTreePageHeader BTreePageHeader;
+typedef struct DataPageHeader DataPageHeader;
+typedef struct OverflowPageHeader OverflowPageHeader;
+
+#include "db/index/page_format.h"
+#include "db/data/page_format.h"
+#include "db/overflow/page_format.h"
 
 typedef enum {
     DATA,
@@ -31,14 +40,15 @@ typedef struct {
     uint8_t dirty;
     uint8_t free;
     PageType type;
-    PageTypeHeader type_specific;  // TODO: These have to be padded to same size in each implementation 
+    PageTypeHeader type_specific;  // These have to be padded to same size in each implementation 
 } PageHeader;
 
 // Page Memory, aligned to PAGE_SIZE (4KB usually) 
 // The usable space is further capped to prevent journal from exceeding PAGE_SIZE
-// TODO: This is given me a warning that header is variable sized. Though i thought it would be aligned to the largest member
 typedef struct {
     PageHeader header;
-    uint8_t data[MAX_DATA_BYTES];  // The things is data is depending on the page type 
+    uint8_t payload[MAX_DATA_BYTES];  // The data depends on the page type 
 } Page;
+
+#endif /* PRESEQL_PAGER_DB_FORMAT_H */
 

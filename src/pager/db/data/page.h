@@ -1,11 +1,19 @@
 /* Implements Data pages and slotted page operations */
 
+#ifndef PRESEQL_PAGER_DB_DATA_PAGE_H
+#define PRESEQL_PAGER_DB_DATA_PAGE_H
+
+#include <stdint.h>
+#include "../db_format.h"
+
 /* TODO:
  * Data operations:
  * 1) In reality, due to overflow pages, pulling out data is harder than it sounds. it might require the following of a linked list style overflow page. Overflow pages themselves also have chunks, i.e multiple data pages might store chunks of their data inside an overflow page. So you need to way to follow through each overflow page
  * 2) You need to deal with slotted page vaccuming - define vaccum()
  * 3) Also need to deal with storing an overflow data type
 */
+
+#define SLOT_DELETED 0xFFFF  // Special value to mark deleted slots
 
 // TODO: Fix up each of these operations to match
 
@@ -71,26 +79,14 @@ int delete_row(Page* page, int slot_index) {
 }
 
 
-uint8_t* get_row(Page* page, int slot_index, uint16_t* out_row_size) {
-    DataPageHeader* hdr = &page->header.type_specific.data;
+uint8_t* get_row(Page* page, int slot_index, uint16_t* out_row_size);
 
-    if (slot_index >= hdr->num_slots) return NULL;
+int insert_row(Page* page, const uint8_t* row_data, uint16_t row_size);
 
-    uint16_t* slot = (uint16_t*)(page->payload + sizeof(PageHeader) + slot_index * sizeof(uint16_t));
-    if (*slot == SLOT_DELETED) return NULL;
+int delete_row(Page* page, int slot_index);
 
-    uint16_t offset = *slot;
+// Vacuum function to compact the page by removing deleted slots
+int vacuum_page(Page* page);
 
-    // Guess row size (distance to next slot or to end of page)
-    uint16_t next_offset = MAX_DATA_BYTES;
-    for (int i = 0; i < hdr->num_slots; i++) {
-        uint16_t* s = (uint16_t*)(page->payload + sizeof(PageHeader) + i * sizeof(uint16_t));
-        if (*s != SLOT_DELETED && *s > offset && *s < next_offset) {
-            next_offset = *s;
-        }
-    }
-
-    if (out_row_size) *out_row_size = next_offset - offset;
-    return page->payload + offset;
-}
+#endif /* PRESEQL_PAGER_DB_DATA_PAGE_H */
 

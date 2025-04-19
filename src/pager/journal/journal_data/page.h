@@ -9,7 +9,23 @@
 * ROLLBACK can allow for copying back the original data back the pages
 */
 
-// Journal Header - on disk
+#ifndef PRESEQL_PAGER_JOURNAL_DATA_PAGE_H
+#define PRESEQL_PAGER_JOURNAL_DATA_PAGE_H
+
+#include <stdint.h>
+#include <stdlib.h>
 #include "page_format.h"
+#include "../../status/db.h"
+
+// Journal operations
+PSqlStatus journal_init(const char* db_filename);
+PSqlStatus journal_close();
+PSqlStatus journal_begin_transaction(uint32_t txn_id);
+PSqlStatus journal_add_page(uint32_t txn_id, uint32_t page_no, const uint8_t* page_data, uint16_t data_size);
+PSqlStatus journal_commit_transaction(uint32_t txn_id);
+PSqlStatus journal_rollback_transaction(uint32_t txn_id);
+PSqlStatus journal_is_valid_transaction(uint32_t txn_id);
+
+#endif /* PRESEQL_PAGER_JOURNAL_DATA_PAGE_H */
 
 
