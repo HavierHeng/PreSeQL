@@ -1,50 +1,83 @@
-# Compiler and flags
+
+# Compiler settings
 CC = gcc
-CFLAGS = -Wall -Wextra -std=c99 -g
+CFLAGS = -Wall -Wextra -std=c99 -g -I./src
 
 # Directories
 SRC_DIR = src
-INC_DIR = include
-OBJ_DIR = obj
-BIN_DIR = bin
+OBJ_DIR = build/obj
+BIN_DIR = build/bin
 TEST_DIR = tests
 
-# Create directory structure if it doesn't exist
-$(shell mkdir -p $(OBJ_DIR) $(BIN_DIR))
+# Source files by category (excluding main files)
+COMPILER_SRCS = $(wildcard $(SRC_DIR)/compiler/*.c)
+ALGORITHM_SRCS = $(wildcard $(SRC_DIR)/algorithm/*.c)
+PAGER_SRCS = $(wildcard $(SRC_DIR)/pager/*.c) \
+             $(wildcard $(SRC_DIR)/pager/db/data/*.c) \
+             $(wildcard $(SRC_DIR)/pager/db/index/*.c) \
+             $(wildcard $(SRC_DIR)/pager/db/overflow/*.c) \
+             $(wildcard $(SRC_DIR)/pager/journal/journal_data/*.c)
+VM_SRCS = $(wildcard $(SRC_DIR)/vm_engine/*.c)
+ALLOCATOR_SRCS = $(wildcard $(SRC_DIR)/allocator/*.c)
+STATUS_SRCS = $(wildcard $(SRC_DIR)/status/*.c)
+TYPES_SRCS = $(wildcard $(SRC_DIR)/types/*.c)
 
-# Source files and object files
-SRCS = $(wildcard $(SRC_DIR)/*.c)
+# All source files (excluding main.c)
+SRCS = $(COMPILER_SRCS) $(ALGORITHM_SRCS) $(PAGER_SRCS) $(VM_SRCS) \
+       $(ALLOCATOR_SRCS) $(STATUS_SRCS) $(TYPES_SRCS)
+
+# Object files
 OBJS = $(patsubst $(SRC_DIR)/%.c,$(OBJ_DIR)/%.o,$(SRCS))
 
-# Main target
-TARGET = $(BIN_DIR)/program
+# Create build directories
+$(shell mkdir -p $(BIN_DIR) \
+	$(OBJ_DIR)/compiler \
+	$(OBJ_DIR)/algorithm \
+	$(OBJ_DIR)/pager/db/data \
+	$(OBJ_DIR)/pager/db/index \
+	$(OBJ_DIR)/pager/db/overflow \
+	$(OBJ_DIR)/pager/journal/journal_data \
+	$(OBJ_DIR)/vm_engine \
+	$(OBJ_DIR)/allocator \
+	$(OBJ_DIR)/status \
+	$(OBJ_DIR)/types)
 
 # Default target
-all: $(TARGET)
+all: preseql
 
-# Link object files to create executable
-$(TARGET): $(OBJS)
-	$(CC) $(CFLAGS) -o $@ $^ -I$(INC_DIR)
+# Main CLI program
+preseql: $(OBJS) $(OBJ_DIR)/main.o
+	$(CC) $(CFLAGS) -o $(BIN_DIR)/$@ $^
 
-# Compile source files to object files
+# Test radix tree
+test_radix: $(OBJ_DIR)/algorithm/radix_tree.o $(OBJ_DIR)/tests/test_radix.o
+	$(CC) $(CFLAGS) -o $(BIN_DIR)/$@ $^
+
+# Compile main.c
+$(OBJ_DIR)/main.o: $(SRC_DIR)/main.c
+	$(CC) $(CFLAGS) -c $< -o $@
+
+# Compile test_radix.c
+$(OBJ_DIR)/tests/test_radix.o: $(TEST_DIR)/test_radix.c
+	@mkdir -p $(OBJ_DIR)/tests
+	$(CC) $(CFLAGS) -c $< -o $@
+
+# Generic rule for compiling source files
 $(OBJ_DIR)/%.o: $(SRC_DIR)/%.c
-	$(CC) $(CFLAGS) -c -o $@ $< -I$(INC_DIR)
+	@mkdir -p $(dir $@)
+	$(CC) $(CFLAGS) -c $< -o $@
 
-# Clean build files
+# Clean build artifacts
 clean:
-	rm -rf $(OBJ_DIR)/* $(BIN_DIR)/*
+	rm -rf build
 
-# Build and run
-run: all
-	./$(TARGET)
+# Run the main CLI program
+run: preseql
+	$(BIN_DIR)/preseql
 
-# Build tests
-test: all
-	$(CC) $(CFLAGS) $(TEST_DIR)/*.c -o $(BIN_DIR)/tests -I$(INC_DIR)
-	./$(BIN_DIR)/tests
-
-# Include header file dependencies
--include $(OBJS:.o=.d)
+# Run the radix tree test
+run_radix: test_radix
+	$(BIN_DIR)/test_radix
 
 # Phony targets
-.PHONY: all clean run test
+.PHONY: all clean run run_radix preseql test_radix

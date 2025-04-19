@@ -6,9 +6,10 @@
 #include <stdlib.h>
 #include <string.h>
 #include <assert.h>
-#include "data/page.h"
-#include "overflow/page.h"
-#include "index/page.h"
+#include "db/base_db/page.h"
+#include "db/data/page.h"
+#include "db/overflow/page.h"
+#include "db/index/page.h"
 
 
 typedef enum {
