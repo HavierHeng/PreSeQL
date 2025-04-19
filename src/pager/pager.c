@@ -1,50 +1,24 @@
-/* Aka the serializer, but also handles read/writes to disk 
-[ Page 0 ] Header Metadata - Stores magic number, versioning and roots of various tables - acts as a boot sector
+#include "pager.h"
 
-[ Page 1 ] Table Catalog (B+ Tree Root Page) - track each Index Page for each table, its names and its root page and Index type
-
-[ Page 2 ] Column Catalog (B+ Tree Root Page) - track column schema for each table
-
-[ Page 3 ] Foreign Key Catalog - track Foreign Key Constraints between table to table
-  
-[ Page 4..X ]
-  └─ Table Data Pages (slotted page implementation) - stores the actual data
-  └─ Index Pages (B+ tree nodes) - Internal nodes, and leaf nodes which point to data (or other nodes)
-  └─ Overflow Pages - for big INTEGER and TEXT that do not fit within a page
-  └─ Free Pages - Pages marked as freed in database file, these are holes created after deletion of pages (a bitmap in the Page 0 header on disk keeps track of what pages are free for reuse - to fill in holes)
- * */
-
-#ifndef PRESEQL_PAGER_H
-#define PRESEQL_PAGER_H
-
-#include <stdio.h>
-#include <stdlib.h>
-#include <stdint.h>
-#include <stdbool.h>
-#include <fcntl.h>
-#include <unistd.h>
-#include <sys/mman.h>  // For specifying mmap() flags
-#include <sys/stat.h>  // Handle structs of data by stat() functions
-#include "page_format.h"
-#include "../algorithm/radix_tree.h"  // For efficiently finding free pages
-#include "../preseql.h"  // Implement PSql Open and Close methods
-#include "constants.h"
-
-
-/* Manage Free Pages via Radix Tree */
-RadixTree* free_page_map;  // You initialize this somewhere in DB init
-
-void init_free_page_map();
+void init_free_page_map() {
+    free_page_map = radix_tree_create();
+}
 
 // Mark a page number as free
-void mark_page_free(uint32_t page_no);
+void mark_page_free(uint32_t page_no) {
+    radix_tree_insert(free_page_map, page_no, (void*)1);
+}
 
 // Mark a page number as allocated
-void mark_page_used(uint32_t page_no);
+void mark_page_used(uint32_t page_no) {
+    radix_tree_delete(free_page_map, page_no);
+}
 
 // Get a free page number, or return -1 if none 
 // if no free page then use the highest known page number + 1 (stored in page header)
-int32_t get_free_page();
+int32_t get_free_page() {
+    return radix_tree_pop_min(free_page_map); // Fastest available
+}
 
 /* Page Allocation & Initialization */
 Page* allocate_page(uint32_t page_no, PageType type) {
@@ -129,6 +103,8 @@ Page* init_overflow_page(uint32_t page_no) {
 // Give some mmap memory to create 
 Page* psql_init_db(void* mem_start); 
 
+/* preseql.h - Open/Close DB file, as a read/write database */
+PSqlStatus psql_open(PSql* db);
+PSqlStatus psql_close(PSql* db);
 
-#endif
 

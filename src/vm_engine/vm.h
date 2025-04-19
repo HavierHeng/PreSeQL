@@ -36,7 +36,7 @@ typedef struct PSqlStatement {
     int cursor_count;
 
     // Result status (SQLITE_ROW, SQLITE_DONE, SQLITE_ERROR, etc.)
-    PsqlStepStatus result_code;
+    PSqlStepStatus result_code;
 
     // Optional: error info, current database, etc.
     // Error messages will be passed to psql_err
