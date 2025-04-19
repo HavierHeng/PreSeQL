@@ -1,3 +1,24 @@
+# Pager subsystem
+Pager subsystem handles a bulk of the I/O handling and file operations on the database. Given how much of the database is always meant to be disk-backed, this contains a bulk of the code on the low-level specifics of dealing with the serialization of the file.
+
+Pager handles two different dynamically growing files:
+1) Main `.pseql` database file - contains the data.
+2) Journal `.pseql-journal` file - contains a copy of the original pages of the database whenever TCL instructions like `BEGIN TRANSACTION`, `COMMIT` and `ROLLBACK` is handled. This allows rollback to transaction ID.
+
+# Database initialization flow
+When a new database is opened,
+1) If file exists and is_valid (via CRC32 checksum): `mmap()` into a specific memory location in virtual memory. This gives us a `(void *)` ptr to the "start" of the file. Can immediately do operations on DB.
+2) If the file is empty: Then follow following steps:
+3) Create Page 0 Base Header - This is one page only
+4) Create Page 1-3 Special Catalog Tables (Table, Column, Foreign Key) - These are B+ Tree Indexes with their own hardcoded data sorted by id
+5) Hand over control to VM engine
+
+
+If Journal is implemented, on database opening:
+1) `mmap()` file - Create a blank journal file with only the header metadata. This serves as a blank canvas for any transactions later on.
+2) If transaction happens via `BEGIN TRANSACTIONS`: Create the necessary copies of the pages into Journal. This is handled by VM.
+3) If transaction number returned by the VM is not continguous with the highest transaction number seen by the journal - this invalidate the whole journal. Journal is cleared and reinitialized.
+
 # Database - Disk and in-memory representations differences
 
 When dealing with database files, it is important to distinguish between on-disk and in-memory representations.
@@ -161,3 +182,22 @@ There are ways to make secondary indexes:
 Making an secondary index basically initializes a whole new B+ Tree on the disk which costs more memory space, but buys back time in the long run. However, interally, as data is added, then its effectively inserted into all B-Tree indexes that are affected by the added data (its more costly on time).
 - Internally building a secondary index off the primary index will cause it to point to the same data pages. The data page is not marked as freed until all indexes stop referencing it (tracked by a reference counter in the header)
 
+
+## Why is Journal separated?
+
+Journal file is made separately as having two dynamically growing regions in one db file is too messy. Journal file entries can be invalidated (if transaction numbers are distinuous), and it would be easier to just make it separate to clear all journal entries at one go.
+
+Main db file already has to store pages for the indexes, data, and overflow pages which can grow. 
+
+If you wanna have another part that grows, either you:
+1) preallocate a large amount of empty space then put the journal behind 
+    - this is okay for filesystems with sparse file support, but not APFS+ where sparse file support is not available
+2) You can also truncate dynamic regions if they are not used 
+    - e.g if we specified to have 65535 journal entries - we can just shrink the unused section 
+    - This is messy as you need to track more things until `COMMIT` is done
+3) Block compress the journal pages on write - such as using ZSTD compression
+    - Downside is speed to compress and decompress
+4) Simply use a separate journal file 
+    - easier to manage
+    - Separation of concerns
+    - Append and track as much as I want

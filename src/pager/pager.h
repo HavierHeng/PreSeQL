@@ -28,12 +28,9 @@
 #include <sys/stat.h>  // Handle structs of data by stat() functions
 #include "page_format.h"
 #include "../algorithm/radix_tree.h"  // For efficiently finding free pages
+#include "../preseql.h"  // Implement PSql Open and Close methods
+#include "constants.h"
 
-
-// Max keys per B+ Tree node - i.e max number of children a node can have - i.e fanout
-// Max keys is (ORDER-1) for internal nodes, ORDER for leaf nodes
-// Set statically as its on disk
-#define ORDER 256
 
 /* Manage Free Pages via Radix Tree */
 RadixTree* free_page_map;  // You initialize this somewhere in DB init
@@ -101,12 +98,13 @@ void free_page(Page* page, uint32_t page_no) {
 */
 
 
-// Specialized Init Helpers for B+ Tree indexes and pages
+/* Specialized Factory methods for each type of Pages:
+ * 1) Page 0 - Base Metadata Page for the whole DB file
+ * 2) Index Page
+ * 3) Metadata Page
+ * 4) Overflow Page
+ */
 
-/* TODO:
- * Data operations:
- * 1) In reality, due to overflow pages, pulling out data is harder than it sounds. it might require the following of a linked list style overflow page. Overflow pages themselves also have chunks, i.e multiple data pages might store chunks of their data inside an overflow page. So you need to way to follow through each overflow page
-*/
 Page* init_data_page(uint32_t page_no) {
     return allocate_page(page_no, DATA);
 }
@@ -127,4 +125,22 @@ Page* init_overflow_page(uint32_t page_no) {
     return allocate_page(page_no, OVERFLOW);
 }
 
+
+/* 
+* TODO: page specific functions are defined within their subfolder themselves - e.g slotted page is specific to data page - so its handled within there
+*/
+
+/*
+* TODO: I need a way to open_db - with choice to overwrite or keep if exists. This means I have to include the "preseql.h" file in the base path, and implrment the psql_open and psql_close methods. I also need a helper just purely to init_db().
+*
+* To PSql struct - add a pointer to the base location of the mmap memory via mem_start
+*/
+// Give some mmap memory to create 
+Page* psql_init_db(void* mem_start); 
+/* Open/Close DB file, as a read/write database */
+PSqlStatus psql_open(PSql* db);
+PSqlStatus psql_close(PSql* db);
+
+
 #endif
+
