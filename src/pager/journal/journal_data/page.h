@@ -10,7 +10,6 @@
 */
 
 // Journal Header - on disk
-#include "../pager/page_format.h"
-#include "journal_page.h"
+#include "page_format.h"
 
 

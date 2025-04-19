@@ -1,6 +1,5 @@
 /* Overflow page and radix tree allocator */
 
-#define MAX_OVERFLOW_CHUNKS 256  // Max chunks that can be stored in an Overflow page
 //
 typedef struct {
     uint8_t chunk_id;  // Chunk
