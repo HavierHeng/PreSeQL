@@ -1,9 +1,26 @@
+
 # Pager subsystem
 Pager subsystem handles a bulk of the I/O handling and file operations on the database. Given how much of the database is always meant to be disk-backed, this contains a bulk of the code on the low-level specifics of dealing with the serialization of the file.
 
 Pager handles two different dynamically growing files:
 1) Main `.pseql` database file - contains the data.
 2) Journal `.pseql-journal` file - contains a copy of the original pages of the database whenever TCL instructions like `BEGIN TRANSACTION`, `COMMIT` and `ROLLBACK` is handled. This allows rollback to transaction ID.
+
+File layout in this subsystem is that each folder contains the implementation of one `page` and their necessary page related functions.
+- e.g `base_db` and `base_journal` are implementations for Page 0 of the database and journal.
+
+For database:
+- `base_db`
+- `index`
+- `data`
+- `overflow`
+- `catalog`
+
+For Journal:
+- `base_journal`
+- `journal_index`
+- `journal_data`
+
 
 # Database initialization flow
 When a new database is opened,
