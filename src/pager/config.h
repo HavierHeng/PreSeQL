@@ -9,7 +9,7 @@
                                                         since journal has some overhead itself, 
                                                         but we aim for page alignment */
 
-#define MAX_HEADER_SIZE 256  /* Max page header size in bytes - this makes it easier to know when the page data starts and ends */
+#define MAX_HEADER_SIZE 255  /* Max page header size in bytes - this makes it easier to know when the page data starts and ends */
 
 /* Base Metadata Page */
 #define MAGIC_NUMBER_SIZE 8  /* Magic number is a fixed sized field */
@@ -23,6 +23,7 @@
                         Max keys is (ORDER-1) for internal nodes, ORDER for leaf nodes */
 
 /* Data Page */
+#define MAX_DATA_PER_SLOT 255  /* Max data for a slot - if exceeded it will go into an Overflow Page - this is reasonable to implement a VARCHAR(255) as TEXT (1 byte is for Null term) */
 
 /* Overflow Page */
 #define MAX_OVERFLOW_CHUNKS 256  /* Max chunks that can be stored in an Overflow page */
