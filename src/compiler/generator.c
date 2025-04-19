@@ -213,13 +213,13 @@ void print_program(CompiledProgram *program)
 
     // Map opcodes to their string representation for readability
     const char *opcode_names[] = {
+        "OP_NOP", // This should be first (index 0)
         "OP_CREATE_TABLE", "OP_OPEN_TABLE", "OP_DEFINE_SCHEMA", "OP_DROP_TABLE",
         "OP_INSERT", "OP_SEARCH", "OP_DELETE", "OP_UPDATE",
         "OP_DELETE_ROW", "OP_RETURN_ROW", "OP_COMPARE", "OP_JUMP_IF_FALSE", "OP_HALT",
         "OP_BEGIN_TXN", "OP_COMMIT", "OP_ROLLBACK",
         "OP_OUTER_JOIN", "OP_INNER_JOIN", "OP_SORT", "OP_SWAP_ROWS",
-        "OP_GET_SCHEMA", "OP_GET_LOGS", "OP_GET_BTREEINFO", "OP_GET_DBPAGE", "OP_GET_MEMSET",
-        "OP_NOP"};
+        "OP_GET_SCHEMA", "OP_GET_LOGS", "OP_GET_BTREEINFO", "OP_GET_DBPAGE", "OP_GET_MEMSET"};
 
     for (size_t i = 0; i < program->count; i++)
     {
