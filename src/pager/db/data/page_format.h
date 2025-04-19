@@ -4,7 +4,7 @@
  */
 
 #define MAX_DATA_SLOTS 256  // Max number of slots per data page
-#include "../../types/psql_types.h"  // For the base 3 types, NULL, PTR, TEXT, INT
+#include "psql_types.h"  // For the base 3 types, NULL, PTR, TEXT, INT
 
 typedef struct {
     uint16_t num_slots;
