@@ -107,6 +107,57 @@ void generate_control(CompiledProgram *program, ControlStatement *stmt)
     emit_instruction(program, OP_HALT, 0, 0, NULL);
 }
 
+// Generate code for INSERT statements
+void generate_insert(CompiledProgram *program, InsertStatement *stmt)
+{
+    // Begin transaction
+    emit_instruction(program, OP_BEGIN_TXN, 0, 0, NULL);
+
+    // Open the table
+    emit_instruction(program, OP_OPEN_TABLE, 0, 0, stmt->table_name);
+
+    // Add INSERT operation for each column/value pair
+    for (size_t i = 0; i < stmt->column_count; i++)
+    {
+        if (stmt->values[i].type == VALUE_INTEGER)
+        {
+            emit_instruction(program, OP_INSERT, i, stmt->values[i].int_value, stmt->columns[i]);
+        }
+        else if (stmt->values[i].type == VALUE_TEXT)
+        {
+            // For text values, we store the column name as param1 and use string_param for the value
+            emit_instruction(program, OP_INSERT, i, 0, stmt->values[i].text_value);
+        }
+    }
+
+    // Commit transaction
+    emit_instruction(program, OP_COMMIT, 0, 0, NULL);
+
+    // Halt execution
+    emit_instruction(program, OP_HALT, 0, 0, NULL);
+}
+// Generate code for CREATE TABLE statements
+void generate_create(CompiledProgram *program, CreateStatement *stmt)
+{
+    // Create the table
+    emit_instruction(program, OP_CREATE_TABLE, 0, 0, stmt->table_name);
+
+    // Define schema
+    for (size_t i = 0; i < stmt->column_count; i++)
+    {
+        int type = (stmt->columns[i].type == COLTYPE_INT) ? 1 : 2; // 1 for INT, 2 for VARCHAR
+        int length = stmt->columns[i].type_length;
+
+        emit_instruction(program, OP_DEFINE_SCHEMA, type, length, stmt->columns[i].name);
+    }
+
+    // Commit creation
+    emit_instruction(program, OP_COMMIT, 0, 0, NULL);
+
+    // Halt execution
+    emit_instruction(program, OP_HALT, 0, 0, NULL);
+}
+
 // Main generator function that takes a parsed statement and generates code
 CompiledProgram *generate_code(void *stmt, int stmt_type)
 {
@@ -118,6 +169,12 @@ CompiledProgram *generate_code(void *stmt, int stmt_type)
     {
     case STMT_SELECT:
         generate_select(program, (SelectStatement *)stmt);
+        break;
+    case STMT_INSERT:
+        generate_insert(program, (InsertStatement *)stmt);
+        break;
+    case STMT_CREATE:
+        generate_create(program, (CreateStatement *)stmt);
         break;
     case STMT_BEGIN:
     case STMT_COMMIT:

@@ -35,7 +35,10 @@ typedef struct
 
 typedef enum
 {
+    STMT_NONE = 0,
     STMT_SELECT,
+    STMT_CREATE,
+    STMT_INSERT,
     STMT_BEGIN,
     STMT_COMMIT,
     STMT_ROLLBACK,

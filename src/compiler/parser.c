@@ -506,6 +506,20 @@ void *parse_tokens_with_type(Token **token_streams, size_t token_count, int *out
             *out_stmt_type = STMT_SELECT;
         return stmt;
     }
+    else if (token->type == TOKEN_KEYWORD_INSERT)
+    {
+        InsertStatement *stmt = parse_insert(&parser);
+        if (stmt && out_stmt_type)
+            *out_stmt_type = STMT_INSERT;
+        return stmt;
+    }
+    else if (token->type == TOKEN_KEYWORD_CREATE)
+    {
+        CreateStatement *stmt = parse_create(&parser);
+        if (stmt && out_stmt_type)
+            *out_stmt_type = STMT_CREATE;
+        return stmt;
+    }
     else if (token->type == TOKEN_KEYWORD_BEGIN)
     {
         ControlStatement *stmt = parse_begin(&parser);
