@@ -9,6 +9,8 @@
                                                         since journal has some overhead itself, 
                                                         but we aim for page alignment */
 
+#define MAX_HEADER_SIZE 256  /* Max page header size in bytes - this makes it easier to know when the page data starts and ends */
+
 /* Base Metadata Page */
 #define MAGIC_NUMBER "SQLshite"  // For magic number
 #define DB_FILE_EXTENSION ".pseql"  // 
@@ -20,5 +22,6 @@
 /* Data Page */
 
 /* Overflow Page */
+#define MAX_OVERFLOW_CHUNKS 256  /* Max chunks that can be stored in an Overflow page */
 
 /* Catalog Pages */

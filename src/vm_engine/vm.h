@@ -6,7 +6,7 @@
 #include <stdio.h>
 #include <stdbool.h>
 #include "opcodes.h"
-#include "../status/step.h"
+#include "status/step.h"
 
 /* Forward declarations */
 typedef struct PSqlCursor Cursor;

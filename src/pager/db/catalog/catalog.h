@@ -9,9 +9,9 @@
 
 */
 
-#include "table.h"  // Table catalog - For tracking each table root page, names and type
-#include "column.h"  // Column catalog - For tracking Columns for each table and their schema
-#include "foreign.h"  // Foreign key catalog - For tracking foreign key constraints
 
 
 // TODO: Define helper functions to initialize catalog pages here - they are fundamentally B+ Tree Nodes - these are initialized right away once a new database is open with some initial values
+// Table catalog - For tracking each table root page, names and type
+// Column catalog - For tracking Columns for each table and their schema
+// Foreign key catalog - For tracking foreign key constraints
