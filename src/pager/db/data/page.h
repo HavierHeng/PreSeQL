@@ -9,7 +9,6 @@
 
 // TODO: Fix up each of these operations to match
 
-
 int insert_row(Page* page, const uint8_t* row_data, uint16_t row_size) {
     DataPageHeader* hdr = &page->header.type_specific.data;
 
