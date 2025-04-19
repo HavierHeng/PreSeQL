@@ -2,13 +2,10 @@
 #define PRESEQL_PAGER_PAGE_FORMAT_H
 
 #include <stdint.h>
-#include "config.h"
+#include "constants.h"
 #include "db/index/page_format.h"
 #include "db/data/page_format.h"
 #include "db/overflow/page_format.h"
-
-// Forward declarations
-typedef struct Page Page;
 
 // Page types
 typedef enum {
@@ -56,4 +53,4 @@ typedef struct {
     uint32_t checksum;                  // CRC-32 checksum
 } DatabaseHeader;
 
-#endif /* PRESEQL_PAGER_PAGE_FORMAT_H */
+#endif 

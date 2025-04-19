@@ -1,4 +1,3 @@
-#include "page.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -6,7 +5,9 @@
 #include <unistd.h>
 #include <sys/mman.h>
 #include <sys/stat.h>
-#include "../journal_format.h"
+#include "page.h"
+#include "pager/constants.h"
+#include "page_format.h"
 
 // Static variables for journal state
 static int journal_fd = -1;
@@ -34,7 +35,7 @@ PSqlStatus journal_init(const char* db_filename) {
         return PSQL_IOERR;
     }
     
-    // Get file size
+    // Get file size - to check if Journal needs to have its header recreated
     struct stat st;
     if (fstat(journal_fd, &st) < 0) {
         close(journal_fd);
@@ -293,7 +294,8 @@ PSqlStatus journal_commit_transaction(uint32_t txn_id) {
     return PSQL_OK;
 }
 
-// Rollback a transaction
+// Rollback a transaction - 1 transaction at a time
+// If there is multiple transaction rollbacks then call this more than once
 PSqlStatus journal_rollback_transaction(uint32_t txn_id) {
     if (journal_fd < 0 || !journal_mem) return PSQL_ERROR;
     
@@ -302,21 +304,21 @@ PSqlStatus journal_rollback_transaction(uint32_t txn_id) {
         return PSQL_ERROR;
     }
     
-    // For rollback, we need to apply all journal entries in reverse order
-    // This would be implemented by the caller, who would read each entry and restore the original page
+    // For rollback, we need to apply all journal entries in reverse order. Start from the freshest changes and then keep going back by 1 transaction
+    // TODO: This would be implemented by the caller (i.e VM), who would read each entry and restore the original page
     
-    // After rollback, truncate the journal back to header size
+    // After rollback, truncate the journal back to header size - effectively trhowing away entries
     if (ftruncate(journal_fd, sizeof(JournalHeader)) < 0) {
         return PSQL_IOERR;
     }
     
-    // Remap with new size
+    // Remap with new size - prevent any oopsies with SIGBUS cos we might accidentally touch truncated areas
     if (munmap(journal_mem, journal_size) < 0) {
         return PSQL_IOERR;
     }
     
     journal_size = sizeof(JournalHeader);
-    journal_mem = mmap(NULL, journal_size, PROT_READ | PROT_WRITE, MAP_SHARED, journal_fd, 0);
+    journal_mem = mmap(NULL, journal_size, PROT_READ | PROT_WRITE, MAP_SHARED, journal_fd, 0);  // updated mmap
     if (journal_mem == MAP_FAILED) {
         journal_mem = NULL;
         return PSQL_IOERR;

@@ -27,12 +27,13 @@
 #include <sys/stat.h>  // Handle structs of data by stat() functions
 #include "page_format.h"
 #include "config.h"
-#include "../algorithm/radix_tree.h"  // For efficiently finding free pages
+#include "algorithm/radix_tree.h"  // For efficiently finding free pages
+#include "algorithm/crc.h"  // For getting CRC32 checksum to check headers
 #include "../preseql.h"  // Implement PSql Open and Close methods
 #include "constants.h"
 
 
-/* Pager structure */
+/* Pager */
 typedef struct {
     int fd;                     // File descriptor for the database file
     int journal_fd;             // File descriptor for the journal file
@@ -87,10 +88,6 @@ PSqlStatus pager_flush_cache(Pager* pager);
 /* Database initialization */
 PSqlStatus pager_init_new_db(Pager* pager);
 PSqlStatus pager_verify_db(Pager* pager);
-
-/* CRC32 checksum calculation */
-uint32_t calculate_crc32(const void* data, size_t length);
-
 
 #endif
 

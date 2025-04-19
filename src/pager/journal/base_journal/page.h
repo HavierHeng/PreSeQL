@@ -17,6 +17,3 @@
 */
 
 // TODO: Build this for page 0 
-
-    uint16_t highest_page;  /* By tracking the highest page allocated, 
-                            speeds up the future allocation if no free pages to be reused */

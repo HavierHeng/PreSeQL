@@ -1,3 +1,5 @@
+#ifndef RADIX_ALGORITHM_H
+#define RADIX_ALGORITHM_H
 // Radix tree is for finding and freeing free pages in O(log n) time
 // This is used in a few parts of the code: 
 // 1) Finding Free pages in Pager - For Reuse of pages, to prevent fragmentation
@@ -38,3 +40,4 @@ void radix_tree_walk(RadixTree *tree, void (*cb)(uint16_t page, int16_t slot, vo
 // Conversion between freelist and radix tree
 void freelist_to_radix(RadixTree* tree, uint16_t* freelist, size_t count);
 size_t radix_to_freelist(RadixTree* tree, uint16_t* freelist, size_t max_size);
+#endif 

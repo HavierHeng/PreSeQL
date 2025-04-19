@@ -17,9 +17,9 @@ typedef struct BTreePageHeader BTreePageHeader;
 typedef struct DataPageHeader DataPageHeader;
 typedef struct OverflowPageHeader OverflowPageHeader;
 
-#include "db/index/page_format.h"
-#include "db/data/page_format.h"
-#include "db/overflow/page_format.h"
+#include "pager/db/index/page_format.h"
+#include "pager/db/data/page_format.h"
+#include "pager/db/overflow/page_format.h"
 
 typedef enum {
     DATA,
@@ -48,7 +48,7 @@ typedef struct {
 typedef struct {
     PageHeader header;
     uint8_t payload[MAX_DATA_BYTES];  // The data depends on the page type 
-} Page;
+} DBPage;
 
 #endif /* PRESEQL_PAGER_DB_FORMAT_H */
 

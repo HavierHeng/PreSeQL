@@ -17,7 +17,8 @@
 #include "../db_format.h"
 #include "../../status/db.h"
 
-// Catalog initialization functions
+// Catalog initialization functions - These are called when new DB file is created
+// The primary keys are always going to be the first ID for each catalog table
 PSqlStatus init_table_catalog(Page* page);
 PSqlStatus init_column_catalog(Page* page);
 PSqlStatus init_fk_catalog(Page* page);
@@ -45,4 +46,4 @@ PSqlStatus catalog_get_foreign_key_details(uint16_t fk_id, uint16_t* out_from_ta
                                          uint16_t* out_to_table, uint16_t* out_to_column,
                                          uint8_t* out_on_delete, uint8_t* out_on_update);
 
-#endif /* PRESEQL_PAGER_DB_CATALOG_H */
+#endif
