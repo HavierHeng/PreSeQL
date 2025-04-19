@@ -1,0 +1,531 @@
+#include "catalog.h"
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include "../index/page.h"
+
+// Catalog table IDs
+#define TABLE_CATALOG_ID 1
+#define COLUMN_CATALOG_ID 2
+#define FK_CATALOG_ID 3
+
+// Table catalog column indices
+#define TABLE_ID_COL 0
+#define TABLE_NAME_COL 1
+#define ROOT_PAGE_COL 2
+#define INDEX_TYPE_COL 3
+#define FLAGS_COL 4
+#define SCHEMA_VERSION_COL 5
+#define CREATED_ON_COL 6
+#define LAST_MODIFIED_COL 7
+
+// Column catalog column indices
+#define COL_TABLE_ID_COL 0
+#define COL_INDEX_COL 1
+#define COL_NAME_COL 2
+#define COL_TYPE_COL 3
+#define COL_NULLABLE_COL 4
+#define COL_IS_PK_COL 5
+
+// FK catalog column indices
+#define FK_ID_COL 0
+#define FROM_TABLE_COL 1
+#define FROM_COLUMN_COL 2
+#define TO_TABLE_COL 3
+#define TO_COLUMN_COL 4
+#define ON_DELETE_COL 5
+#define ON_UPDATE_COL 6
+
+// Flag values
+#define FLAG_HIDDEN 0x01
+#define FLAG_SYSTEM 0x02
+#define FLAG_TEMPORARY 0x04
+#define FLAG_WITHOUT_ROWID 0x08
+#define FLAG_VIRTUAL 0x10
+#define FLAG_AUTOINCREMENT 0x20
+
+// Helper function to insert a row into a B+ tree
+static PSqlStatus btree_insert_row(Page* page, const uint8_t* key, uint16_t key_size, 
+                                  const uint8_t* value, uint16_t value_size) {
+    // This is a placeholder - in a real implementation, this would call the B+ tree insert function
+    // For now, we'll just return success
+    return PSQL_OK;
+}
+
+// Initialize the table catalog (Page 1)
+PSqlStatus init_table_catalog(Page* page) {
+    if (!page) return PSQL_ERROR;
+    
+    // Set up the B+ tree root page
+    page->header.type_specific.btree.btree_type = BTREE_ROOT;
+    
+    // Insert the three catalog tables into the table catalog
+    
+    // Table 1: Table Catalog
+    uint8_t table_key[sizeof(uint16_t)];
+    uint8_t table_value[256]; // Large enough for all fields
+    uint16_t value_size = 0;
+    
+    // Table ID = 1
+    *(uint16_t*)table_key = TABLE_CATALOG_ID;
+    
+    // Table name = "__table_catalog__"
+    const char* table_name = "__table_catalog__";
+    uint16_t name_len = strlen(table_name) + 1; // Include null terminator
+    
+    // Value format: name_len(2) + name + root_page(2) + index_type(1) + flags(1) + schema_version(2) + created_on(4) + last_modified(4)
+    *(uint16_t*)(table_value + value_size) = name_len;
+    value_size += sizeof(uint16_t);
+    
+    memcpy(table_value + value_size, table_name, name_len);
+    value_size += name_len;
+    
+    // Root page = 1
+    *(uint16_t*)(table_value + value_size) = 1;
+    value_size += sizeof(uint16_t);
+    
+    // Index type = 0 (B+ Tree)
+    table_value[value_size++] = 0;
+    
+    // Flags = SYSTEM | HIDDEN
+    table_value[value_size++] = FLAG_SYSTEM | FLAG_HIDDEN;
+    
+    // Schema version = 1
+    *(uint16_t*)(table_value + value_size) = 1;
+    value_size += sizeof(uint16_t);
+    
+    // Created on = current time (placeholder)
+    *(uint32_t*)(table_value + value_size) = 0;
+    value_size += sizeof(uint32_t);
+    
+    // Last modified = current time (placeholder)
+    *(uint32_t*)(table_value + value_size) = 0;
+    value_size += sizeof(uint32_t);
+    
+    // Insert into B+ tree
+    PSqlStatus status = btree_insert_row(page, table_key, sizeof(table_key), table_value, value_size);
+    if (status != PSQL_OK) return status;
+    
+    // Table 2: Column Catalog
+    *(uint16_t*)table_key = COLUMN_CATALOG_ID;
+    value_size = 0;
+    
+    // Table name = "__column_catalog__"
+    table_name = "__column_catalog__";
+    name_len = strlen(table_name) + 1;
+    
+    *(uint16_t*)(table_value + value_size) = name_len;
+    value_size += sizeof(uint16_t);
+    
+    memcpy(table_value + value_size, table_name, name_len);
+    value_size += name_len;
+    
+    // Root page = 2
+    *(uint16_t*)(table_value + value_size) = 2;
+    value_size += sizeof(uint16_t);
+    
+    // Index type = 0 (B+ Tree)
+    table_value[value_size++] = 0;
+    
+    // Flags = SYSTEM | HIDDEN
+    table_value[value_size++] = FLAG_SYSTEM | FLAG_HIDDEN;
+    
+    // Schema version = 1
+    *(uint16_t*)(table_value + value_size) = 1;
+    value_size += sizeof(uint16_t);
+    
+    // Created on = current time (placeholder)
+    *(uint32_t*)(table_value + value_size) = 0;
+    value_size += sizeof(uint32_t);
+    
+    // Last modified = current time (placeholder)
+    *(uint32_t*)(table_value + value_size) = 0;
+    value_size += sizeof(uint32_t);
+    
+    // Insert into B+ tree
+    status = btree_insert_row(page, table_key, sizeof(table_key), table_value, value_size);
+    if (status != PSQL_OK) return status;
+    
+    // Table 3: Foreign Key Catalog
+    *(uint16_t*)table_key = FK_CATALOG_ID;
+    value_size = 0;
+    
+    // Table name = "__fk_catalog__"
+    table_name = "__fk_catalog__";
+    name_len = strlen(table_name) + 1;
+    
+    *(uint16_t*)(table_value + value_size) = name_len;
+    value_size += sizeof(uint16_t);
+    
+    memcpy(table_value + value_size, table_name, name_len);
+    value_size += name_len;
+    
+    // Root page = 3
+    *(uint16_t*)(table_value + value_size) = 3;
+    value_size += sizeof(uint16_t);
+    
+    // Index type = 0 (B+ Tree)
+    table_value[value_size++] = 0;
+    
+    // Flags = SYSTEM | HIDDEN
+    table_value[value_size++] = FLAG_SYSTEM | FLAG_HIDDEN;
+    
+    // Schema version = 1
+    *(uint16_t*)(table_value + value_size) = 1;
+    value_size += sizeof(uint16_t);
+    
+    // Created on = current time (placeholder)
+    *(uint32_t*)(table_value + value_size) = 0;
+    value_size += sizeof(uint32_t);
+    
+    // Last modified = current time (placeholder)
+    *(uint32_t*)(table_value + value_size) = 0;
+    value_size += sizeof(uint32_t);
+    
+    // Insert into B+ tree
+    status = btree_insert_row(page, table_key, sizeof(table_key), table_value, value_size);
+    
+    return status;
+}
+
+// Initialize the column catalog (Page 2)
+PSqlStatus init_column_catalog(Page* page) {
+    if (!page) return PSQL_ERROR;
+    
+    // Set up the B+ tree root page
+    page->header.type_specific.btree.btree_type = BTREE_ROOT;
+    
+    // Insert the columns for the table catalog
+    uint8_t column_key[sizeof(uint16_t) * 2]; // table_id + column_index
+    uint8_t column_value[256]; // Large enough for all fields
+    uint16_t value_size = 0;
+    PSqlStatus status;
+    
+    // Define columns for Table Catalog (table_id = 1)
+    const char* column_names[] = {
+        "table_id", "table_name", "root_page", "index_type", 
+        "flags", "schema_version", "created_on", "last_modified"
+    };
+    uint8_t column_types[] = {
+        PSQL_INT, PSQL_TEXT, PSQL_INT, PSQL_INT,
+        PSQL_INT, PSQL_INT, PSQL_INT, PSQL_INT
+    };
+    uint8_t column_nullable[] = {
+        0, 0, 0, 0, 0, 0, 0, 0
+    };
+    uint8_t column_is_pk[] = {
+        1, 0, 0, 0, 0, 0, 0, 0
+    };
+    
+    // Insert columns for Table Catalog
+    for (int i = 0; i < 8; i++) {
+        // Key: table_id + column_index
+        *(uint16_t*)(column_key) = TABLE_CATALOG_ID;
+        *(uint16_t*)(column_key + sizeof(uint16_t)) = i;
+        
+        value_size = 0;
+        
+        // Column name
+        uint16_t name_len = strlen(column_names[i]) + 1;
+        *(uint16_t*)(column_value + value_size) = name_len;
+        value_size += sizeof(uint16_t);
+        
+        memcpy(column_value + value_size, column_names[i], name_len);
+        value_size += name_len;
+        
+        // Column type
+        column_value[value_size++] = column_types[i];
+        
+        // Nullable
+        column_value[value_size++] = column_nullable[i];
+        
+        // Is primary key
+        column_value[value_size++] = column_is_pk[i];
+        
+        // Insert into B+ tree
+        status = btree_insert_row(page, column_key, sizeof(column_key), column_value, value_size);
+        if (status != PSQL_OK) return status;
+    }
+    
+    // Define columns for Column Catalog (table_id = 2)
+    const char* col_column_names[] = {
+        "table_id", "column_index", "column_name", "column_type", 
+        "nullable", "is_pk"
+    };
+    uint8_t col_column_types[] = {
+        PSQL_INT, PSQL_INT, PSQL_TEXT, PSQL_INT,
+        PSQL_INT, PSQL_INT
+    };
+    uint8_t col_column_nullable[] = {
+        0, 0, 0, 0, 0, 0
+    };
+    uint8_t col_column_is_pk[] = {
+        1, 1, 0, 0, 0, 0
+    };
+    
+    // Insert columns for Column Catalog
+    for (int i = 0; i < 6; i++) {
+        // Key: table_id + column_index
+        *(uint16_t*)(column_key) = COLUMN_CATALOG_ID;
+        *(uint16_t*)(column_key + sizeof(uint16_t)) = i;
+        
+        value_size = 0;
+        
+        // Column name
+        uint16_t name_len = strlen(col_column_names[i]) + 1;
+        *(uint16_t*)(column_value + value_size) = name_len;
+        value_size += sizeof(uint16_t);
+        
+        memcpy(column_value + value_size, col_column_names[i], name_len);
+        value_size += name_len;
+        
+        // Column type
+        column_value[value_size++] = col_column_types[i];
+        
+        // Nullable
+        column_value[value_size++] = col_column_nullable[i];
+        
+        // Is primary key
+        column_value[value_size++] = col_column_is_pk[i];
+        
+        // Insert into B+ tree
+        status = btree_insert_row(page, column_key, sizeof(column_key), column_value, value_size);
+        if (status != PSQL_OK) return status;
+    }
+    
+    // Define columns for FK Catalog (table_id = 3)
+    const char* fk_column_names[] = {
+        "fk_id", "from_table", "from_column", "to_table", 
+        "to_column", "on_delete", "on_update"
+    };
+    uint8_t fk_column_types[] = {
+        PSQL_INT, PSQL_INT, PSQL_INT, PSQL_INT,
+        PSQL_INT, PSQL_INT, PSQL_INT
+    };
+    uint8_t fk_column_nullable[] = {
+        0, 0, 0, 0, 0, 0, 0
+    };
+    uint8_t fk_column_is_pk[] = {
+        1, 0, 0, 0, 0, 0, 0
+    };
+    
+    // Insert columns for FK Catalog
+    for (int i = 0; i < 7; i++) {
+        // Key: table_id + column_index
+        *(uint16_t*)(column_key) = FK_CATALOG_ID;
+        *(uint16_t*)(column_key + sizeof(uint16_t)) = i;
+        
+        value_size = 0;
+        
+        // Column name
+        uint16_t name_len = strlen(fk_column_names[i]) + 1;
+        *(uint16_t*)(column_value + value_size) = name_len;
+        value_size += sizeof(uint16_t);
+        
+        memcpy(column_value + value_size, fk_column_names[i], name_len);
+        value_size += name_len;
+        
+        // Column type
+        column_value[value_size++] = fk_column_types[i];
+        
+        // Nullable
+        column_value[value_size++] = fk_column_nullable[i];
+        
+        // Is primary key
+        column_value[value_size++] = fk_column_is_pk[i];
+        
+        // Insert into B+ tree
+        status = btree_insert_row(page, column_key, sizeof(column_key), column_value, value_size);
+        if (status != PSQL_OK) return status;
+    }
+    
+    return PSQL_OK;
+}
+
+// Initialize the foreign key catalog (Page 3)
+PSqlStatus init_fk_catalog(Page* page) {
+    if (!page) return PSQL_ERROR;
+    
+    // Set up the B+ tree root page
+    page->header.type_specific.btree.btree_type = BTREE_ROOT;
+    
+    // Insert the foreign key relationship between column_catalog and table_catalog
+    uint8_t fk_key[sizeof(uint16_t)]; // fk_id
+    uint8_t fk_value[256]; // Large enough for all fields
+    uint16_t value_size = 0;
+    
+    // FK ID = 1
+    *(uint16_t*)fk_key = 1;
+    
+    // From table = 2 (column_catalog)
+    *(uint16_t*)(fk_value + value_size) = COLUMN_CATALOG_ID;
+    value_size += sizeof(uint16_t);
+    
+    // From column = 0 (table_id)
+    *(uint16_t*)(fk_value + value_size) = 0;
+    value_size += sizeof(uint16_t);
+    
+    // To table = 1 (table_catalog)
+    *(uint16_t*)(fk_value + value_size) = TABLE_CATALOG_ID;
+    value_size += sizeof(uint16_t);
+    
+    // To column = 0 (table_id)
+    *(uint16_t*)(fk_value + value_size) = 0;
+    value_size += sizeof(uint16_t);
+    
+    // On delete = 1 (RESTRICT)
+    fk_value[value_size++] = 1;
+    
+    // On update = 1 (RESTRICT)
+    fk_value[value_size++] = 1;
+    
+    // Insert into B+ tree
+    PSqlStatus status = btree_insert_row(page, fk_key, sizeof(fk_key), fk_value, value_size);
+    
+    return status;
+}
+
+// Helper function to find a row in a B+ tree
+static PSqlStatus btree_find_row(Page* page, const uint8_t* key, uint16_t key_size, 
+                                uint8_t** value, uint16_t* value_size) {
+    // This is a placeholder - in a real implementation, this would call the B+ tree search function
+    // For now, we'll just return not found
+    *value = NULL;
+    *value_size = 0;
+    return PSQL_NOTFOUND;
+}
+
+// Helper function to build secondary indexes
+PSqlStatus build_secondary_indexes() {
+    // This is a placeholder - in a real implementation, this would create secondary indexes
+    // For the table catalog: table_name
+    // For the column catalog: table_id (for listing columns of a table)
+    // For the FK catalog: from_table and to_table
+    
+    return PSQL_OK;
+}
+
+// Table catalog operations
+PSqlStatus catalog_add_table(const char* table_name, uint16_t root_page, uint8_t index_type, 
+                            uint8_t flags, uint16_t* out_table_id) {
+    // This would:
+    // 1. Get the next available table_id
+    // 2. Insert a new row into the table catalog
+    // 3. Update secondary indexes
+    
+    if (out_table_id) *out_table_id = 0; // Placeholder
+    return PSQL_OK;
+}
+
+PSqlStatus catalog_get_table_by_name(const char* table_name, uint16_t* out_table_id, uint16_t* out_root_page) {
+    // This would:
+    // 1. Use the table_name secondary index to find the table
+    // 2. Extract table_id and root_page
+    
+    if (out_table_id) *out_table_id = 0; // Placeholder
+    if (out_root_page) *out_root_page = 0; // Placeholder
+    return PSQL_OK;
+}
+
+PSqlStatus catalog_get_table_by_id(uint16_t table_id, char** out_table_name, uint16_t* out_root_page) {
+    // This would:
+    // 1. Use the primary key (table_id) to find the table
+    // 2. Extract table_name and root_page
+    
+    if (out_table_name) *out_table_name = NULL; // Placeholder
+    if (out_root_page) *out_root_page = 0; // Placeholder
+    return PSQL_OK;
+}
+
+PSqlStatus catalog_delete_table(uint16_t table_id) {
+    // This would:
+    // 1. Delete the table from the table catalog
+    // 2. Delete all columns for this table from the column catalog
+    // 3. Delete all foreign keys involving this table
+    // 4. Update secondary indexes
+    
+    return PSQL_OK;
+}
+
+// Column catalog operations
+PSqlStatus catalog_add_column(uint16_t table_id, uint16_t column_index, const char* column_name, 
+                             uint8_t column_type, uint8_t nullable, uint8_t is_pk) {
+    // This would:
+    // 1. Insert a new row into the column catalog
+    // 2. Update secondary indexes
+    
+    return PSQL_OK;
+}
+
+PSqlStatus catalog_get_column_by_name(uint16_t table_id, const char* column_name, uint16_t* out_column_index, 
+                                     uint8_t* out_column_type, uint8_t* out_nullable, uint8_t* out_is_pk) {
+    // This would:
+    // 1. Use the column_name secondary index to find the column
+    // 2. Extract column details
+    
+    if (out_column_index) *out_column_index = 0; // Placeholder
+    if (out_column_type) *out_column_type = 0; // Placeholder
+    if (out_nullable) *out_nullable = 0; // Placeholder
+    if (out_is_pk) *out_is_pk = 0; // Placeholder
+    return PSQL_OK;
+}
+
+PSqlStatus catalog_get_column_by_index(uint16_t table_id, uint16_t column_index, char** out_column_name, 
+                                      uint8_t* out_column_type, uint8_t* out_nullable, uint8_t* out_is_pk) {
+    // This would:
+    // 1. Use the primary key (table_id + column_index) to find the column
+    // 2. Extract column details
+    
+    if (out_column_name) *out_column_name = NULL; // Placeholder
+    if (out_column_type) *out_column_type = 0; // Placeholder
+    if (out_nullable) *out_nullable = 0; // Placeholder
+    if (out_is_pk) *out_is_pk = 0; // Placeholder
+    return PSQL_OK;
+}
+
+PSqlStatus catalog_get_all_columns(uint16_t table_id, uint16_t* out_column_count) {
+    // This would:
+    // 1. Use the table_id secondary index to find all columns for this table
+    // 2. Count the columns
+    
+    if (out_column_count) *out_column_count = 0; // Placeholder
+    return PSQL_OK;
+}
+
+// Foreign key catalog operations
+PSqlStatus catalog_add_foreign_key(uint16_t from_table, uint16_t from_column, uint16_t to_table, 
+                                  uint16_t to_column, uint8_t on_delete, uint8_t on_update, uint16_t* out_fk_id) {
+    // This would:
+    // 1. Get the next available fk_id
+    // 2. Insert a new row into the FK catalog
+    // 3. Update secondary indexes
+    
+    if (out_fk_id) *out_fk_id = 0; // Placeholder
+    return PSQL_OK;
+}
+
+PSqlStatus catalog_get_foreign_keys_for_table(uint16_t table_id, uint16_t** out_fk_ids, uint16_t* out_count) {
+    // This would:
+    // 1. Use the from_table or to_table secondary index to find all FKs for this table
+    // 2. Collect the FK IDs
+    
+    if (out_fk_ids) *out_fk_ids = NULL; // Placeholder
+    if (out_count) *out_count = 0; // Placeholder
+    return PSQL_OK;
+}
+
+PSqlStatus catalog_get_foreign_key_details(uint16_t fk_id, uint16_t* out_from_table, uint16_t* out_from_column,
+                                         uint16_t* out_to_table, uint16_t* out_to_column,
+                                         uint8_t* out_on_delete, uint8_t* out_on_update) {
+    // This would:
+    // 1. Use the primary key (fk_id) to find the FK
+    // 2. Extract FK details
+    
+    if (out_from_table) *out_from_table = 0; // Placeholder
+    if (out_from_column) *out_from_column = 0; // Placeholder
+    if (out_to_table) *out_to_table = 0; // Placeholder
+    if (out_to_column) *out_to_column = 0; // Placeholder
+    if (out_on_delete) *out_on_delete = 0; // Placeholder
+    if (out_on_update) *out_on_update = 0; // Placeholder
+    return PSQL_OK;
+}

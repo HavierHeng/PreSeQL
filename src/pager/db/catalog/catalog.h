@@ -9,9 +9,40 @@
 
 */
 
+#ifndef PRESEQL_PAGER_DB_CATALOG_H
+#define PRESEQL_PAGER_DB_CATALOG_H
 
+#include <stdint.h>
+#include <string.h>
+#include "../db_format.h"
+#include "../../status/db.h"
 
-// TODO: Define helper functions to initialize catalog pages here - they are fundamentally B+ Tree Nodes - these are initialized right away once a new database is open with some initial values
-// Table catalog - For tracking each table root page, names and type
-// Column catalog - For tracking Columns for each table and their schema
-// Foreign key catalog - For tracking foreign key constraints
+// Catalog initialization functions
+PSqlStatus init_table_catalog(Page* page);
+PSqlStatus init_column_catalog(Page* page);
+PSqlStatus init_fk_catalog(Page* page);
+
+// Table catalog operations
+PSqlStatus catalog_add_table(const char* table_name, uint16_t root_page, uint8_t index_type, uint8_t flags, uint16_t* out_table_id);
+PSqlStatus catalog_get_table_by_name(const char* table_name, uint16_t* out_table_id, uint16_t* out_root_page);
+PSqlStatus catalog_get_table_by_id(uint16_t table_id, char** out_table_name, uint16_t* out_root_page);
+PSqlStatus catalog_delete_table(uint16_t table_id);
+
+// Column catalog operations
+PSqlStatus catalog_add_column(uint16_t table_id, uint16_t column_index, const char* column_name, 
+                             uint8_t column_type, uint8_t nullable, uint8_t is_pk);
+PSqlStatus catalog_get_column_by_name(uint16_t table_id, const char* column_name, uint16_t* out_column_index, 
+                                     uint8_t* out_column_type, uint8_t* out_nullable, uint8_t* out_is_pk);
+PSqlStatus catalog_get_column_by_index(uint16_t table_id, uint16_t column_index, char** out_column_name, 
+                                      uint8_t* out_column_type, uint8_t* out_nullable, uint8_t* out_is_pk);
+PSqlStatus catalog_get_all_columns(uint16_t table_id, uint16_t* out_column_count);
+
+// Foreign key catalog operations
+PSqlStatus catalog_add_foreign_key(uint16_t from_table, uint16_t from_column, uint16_t to_table, 
+                                  uint16_t to_column, uint8_t on_delete, uint8_t on_update, uint16_t* out_fk_id);
+PSqlStatus catalog_get_foreign_keys_for_table(uint16_t table_id, uint16_t** out_fk_ids, uint16_t* out_count);
+PSqlStatus catalog_get_foreign_key_details(uint16_t fk_id, uint16_t* out_from_table, uint16_t* out_from_column,
+                                         uint16_t* out_to_table, uint16_t* out_to_column,
+                                         uint8_t* out_on_delete, uint8_t* out_on_update);
+
+#endif /* PRESEQL_PAGER_DB_CATALOG_H */
