@@ -2,16 +2,7 @@
 #include "radix_tree.h"
 #include <stdbool.h>
 
-/* TODO:
- * Radix Tree Operations I need to implement
- * 1) Freelist -> Radix Tree conversion - from disk representation of freelist to memory representation as radix tree - free list is capped at some fixed size in the Header
- * 6) Pop min/find first - Obviously to get the lowest free page available for journal/allocating as data/index/overflow page
- * 7) init and destroy radix tree - for setup and cleanup
- * Extra stuff: There is a struct for RadixTree which contains a pointer to the root RadixNode, that is not implemented
- * Extra stuff 2: Radix Tree is to use the arena_allocator in ../allocator/arena.h - this is just due to the size of the radix tree
-*/ 
-
-// TODO: Is this an arena allocator?
+// TODO: Change to arena allocator 
 
 // Helper function for internal use on Radix Nodes
 // Uses 4 levels with 4 bits each for 16-bit page numbers

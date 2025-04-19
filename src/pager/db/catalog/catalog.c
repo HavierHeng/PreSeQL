@@ -2,9 +2,9 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include "../index/page.h"
+#include "../index/page.h"  // For B+ Tree Operations
 
-// Catalog table IDs
+// Catalog table IDs - These are hardcoded on the onset
 #define TABLE_CATALOG_ID 1
 #define COLUMN_CATALOG_ID 2
 #define FK_CATALOG_ID 3
