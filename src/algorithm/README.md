@@ -16,6 +16,24 @@ This is used in a few parts of the code to reuse pages to prevent fragmentation:
 This is as pages in the database can get huge in number, and is dynamic in count.
 This job cannot be handled by just a bitmap alone since it scales badly to search the high number of 65535 pages for the lowest available page.
 
+## Why not just use a Queue to track free pages?
+Ah ha, good catch.
+
+Its the only reason why I'm bothering to sort the free pages is for:
+1. Locality of Reference (Cache Performance)
+    - Lower-numbered pages tend to be near each other.
+    - Access patterns that stay within a small range of pages are more cache- and disk-friendly (especially if you're using memory-mapped I/O or SSD read-ahead).
+
+2. Fragmentation Control
+    - Allocating low pages first can minimize fragmentation in your file — free space tends to stay near the end.
+    - That means the database file grows in chunks instead of swiss cheese scattered through the file.
+
+3. Better File Growth Behavior
+    - If you allocate higher-numbered pages early, your file might "look" bigger than it is — wasting disk space even if only some of it is used.
+
+4. Debuggability / Simplicity
+    - Sequential allocation makes files easier to understand and debug in tools like hex editors.
+
 
 ## Choice of RADIX_BITS based on some maffs
 

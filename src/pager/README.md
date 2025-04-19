@@ -23,6 +23,8 @@ For Journal:
 
 
 # Database initialization flow
+Database is opened by the virtual machine - it calls functions from the pager subsystem. PreSeQL like SQLite does not have a `CREATE DATABASE` command, but rather its via `psql_open()` which returns a handle to the database.
+
 When a new database is opened,
 1) If file exists and is_valid (via CRC32 checksum): `mmap()` into a specific memory location in virtual memory. This gives us a `(void *)` ptr to the "start" of the file. Can immediately do operations on DB.
 2) If the file is empty: Then follow following steps:
