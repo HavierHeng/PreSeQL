@@ -5,16 +5,10 @@
 #include "status/db.h"
 #include "status/step.h"
 #include "types/psql_types.h"
-#include "vm_engine/opcodes.h"
+#include "pager/pager.h"
 #include "vm_engine/vm.h"
+#include "vm_engine/opcodes.h"
 
-/* Database handle structure */
-typedef struct PSqlDB {
-    char *filename;
-    int flags;
-    void *pager;  /* Pointer to pager implementation - giving it access to the underlying files for DB and Journal */
-    char *error_msg;  /* In case opening the database has an error */
-} PSql;
 
 /* Open/Close DB file, as a read/write database */
 PSqlStatus psql_open(PSql* db);

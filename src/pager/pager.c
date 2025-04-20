@@ -7,7 +7,6 @@
 #include <sys/mman.h>
 #include <sys/stat.h>
 #include <errno.h>
-#include "db/catalog/catalog.h"
 
 void init_free_page_map(Pager* pager) {
     pager->free_page_map = radix_tree_create();

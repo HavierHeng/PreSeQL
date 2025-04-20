@@ -32,6 +32,7 @@ Aim for page alignment by padding. */
 /* Base Metadata Page */
 #define MAGIC_NUMBER_SIZE 8  /* Magic number is a fixed sized field (in bytes) */
 #define MAGIC_NUMBER "SQLSHITE"  /* For magic number */
+#define FREE_PAGE_LIST_SIZE 32  /* number of pages that can be cached into the free page list - in practice, since free pages will be reused up first, its rare that this number will be hit */
 #define FREE_PAGE_LIST_BATCH_SIZE 10  /* the number of changes to Radix tree before flushing back to disk free page list */
 // TODO: Radix tree has to be wrapped in another struct that can count the number of changes
 
@@ -73,15 +74,20 @@ Aim for page alignment by padding. */
 
 #define VACCUM_BATCH_SIZE 15  /* Every how many deletes to check if all pages need to be VACCUMed. VACCUM Operations are expensive but fragmentation slows things down and can make pages sparse/half-filled. */
 
-#define INDEX_SLOT_VACCUM_SIZE 255 /* Threshold for free continguous space before performing a VACCUM and rehashing to all Radix tree buckets of Index Page
+#define FREE_SPACE_VACCUM_SIZE 255 /* Threshold for free continguous space in bytes before performing a VACCUM and rehashing to all Radix tree buckets of Index Page
 */
 
 
 /* Overflow Page */
-#define MAX_OVERFLOW_CHUNKS 255  /* Max chunks that can be stored in an Overflow page, a chunk is defined as effectively a slot of data */
+
 
 /* Catalog Pages */
 #define MAX_TABLE_NAME_LENGTH 255  /* For Table catalog, Including null terminator */
-#define MAX_COLUMN_NAME_LENGTH 255  /* For Table catalog, Including null terminator */
+#define MAX_COLUMN_NAME_LENGTH 255  /* For Column catalog, Including null terminator */
+
+
+/* Radix Tree free buckets - to determine page has slots to put things in */
+#define NUM_BUCKETS 4
+
 
 #endif 

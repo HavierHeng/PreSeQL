@@ -382,7 +382,6 @@ Row* btree_iterator_next(BPlusIterator* it) {
 *   If merging remove the corresponding key from parent and merge nodes
 *   If paarent node underflows, repeat process up to root
 */
-
 void btree_delete(BPlusTree* tree, const uint8_t* prefix) {
     Node* node = get_page(tree, tree->root_id);
     Node* parent = NULL;

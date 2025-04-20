@@ -44,13 +44,6 @@
 #define FLAG_VIRTUAL 0x10
 #define FLAG_AUTOINCREMENT 0x20
 
-// Helper function to insert a row into a B+ tree
-static PSqlStatus btree_insert_row(Page* page, const uint8_t* key, uint16_t key_size, 
-                                  const uint8_t* value, uint16_t value_size) {
-    // This is a placeholder - in a real implementation, this would call the B+ tree insert function
-    // For now, we'll just return success
-    return PSQL_OK;
-}
 
 // Initialize the table catalog (Page 1)
 PSqlStatus init_table_catalog(Page* page) {
