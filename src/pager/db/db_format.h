@@ -20,20 +20,7 @@
 #define PAGE_DIRTY           = 0x10  // 0001 0000 - Page has been modified since the last sync or commit. In practice, this isn't needed since `msync` is done after all modifications.
 #define PAGE_FREE            = 0x20  // 0010 0000 - Page is marked as free and can be reused. In practice, we don't use this since we have the Radix tree loaded in memory.
 #define PAGE_COMPACTIBLE     = 0x40  // 0100 0000 - This flag indicates whether the slots in the page is eligible for compaction. Set when changes are made to the page, but unset after VACCUM. Can hint to page begin as compacted as it can be and should be skipped over during VACCUM.
-#define PAGE_PINNED          = 0x80  // 1000 0000 - Page is pinned in memory can cannot be evicted - In practice, this isn't used since `mmap` deals with paging on its own via the kernel.
-
-/* Guide to use flags later for forgetful people:
-// To set the flag (e.g., mark as dirty)
-flags |= PAGE_DIRTY;
-
-// To check if a page is an index page
-if (flags & PAGE_INDEX) {
-    // It's an index page
-}
-
-// To clear the "pinned" flag (unpin a page)
-flags &= ~PAGE_PINNED;
-*/ 
+#define PAGE_PINNED          = 0x80  // 1000 0000 - Page is pinned in memory can cannot be evicted - In practice, this isn't used since `mmap` deals with paging and caching on its own via the kernel.
 
 // Generic Page Header - for Index, Data and Overflow pages
 // Fun fact: Because all the pages are slotted page based - they actually share the same headers
@@ -55,9 +42,19 @@ typedef struct {
     uint8_t free_slot_count;  // For queue operations
     uint8_t free_slot_list[FREE_SLOT_LIST_SIZE];  // Track and reuse free slots as much as possible
 
-    // Pad to MAX_PAGE_HEADER_SIZE = 16 in bytes
-    uint8_t reserved[3];
-} PageHeader;
+    // Pad to MAX_PAGE_HEADER_SIZE = 32 in bytes
+    uint8_t reserved[2];
+} DBPageHeader;
+
+// Page Memory, aligned to PAGE_SIZE (4096 Bytes usually) 
+// The usable space is further capped to prevent journal from exceeding PAGE_SIZE
+// data includes Slot directory + slot data entries + free space
+typedef struct {
+    DBPageHeader header;  // Padded to 32 bytes
+    uint8_t data[MAX_USABLE_PAGE_SIZE];  // 4032 bytes - The data depends on the page type - its filled with SlotEntry and Index/Data/OverflowSlotData types
+    uint8_t reserved[MAX_JOURNAL_HEADER_SIZE];  // 32 bytes - reserved for Journal later
+} DBPage;
+
 
 
 /* Stored in slot directory table after Header */
@@ -113,15 +110,6 @@ void encode_index_key();  // B+ Tree - applies the encoding trick to signed int 
 void compare_index_key();  // B+ Tree - compares keys lexicographically
 
 // TODO: Compose insert_row and delete_row, get_row using B+ tree and the index, overflow and data page operations
-
-// Page Memory, aligned to PAGE_SIZE (4096Bytes usually) 
-// The usable space is further capped to prevent journal from exceeding PAGE_SIZE
-// data includes Slot directory + whatever data + free space
-typedef struct {
-    PageHeader header;  // 16 bytes
-    uint8_t data[MAX_USABLE_PAGE_SIZE];  // 4064 bytes The data depends on the page type - its filled with SlotEntry and Index/Data/OverflowSlotData types
-    uint8_t reserved[MAX_JOURNAL_HEADER_SIZE];  // 16 bytes - reserved for Journal later
-} DBPage;
 
 /* Usage in practice
 // Usage - creating a data page like this basically
