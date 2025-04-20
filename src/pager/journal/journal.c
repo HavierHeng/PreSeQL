@@ -5,9 +5,10 @@
 #include <unistd.h>
 #include <sys/mman.h>
 #include <sys/stat.h>
-#include "page.h"
+#include <stddef.h>
 #include "pager/constants.h"
-#include "page_format.h"
+#include "journal_format.h"
+#include "algorithm/crc.h"
 
 // Static variables for journal state
 static int journal_fd = -1;

@@ -21,8 +21,8 @@
 
 
 /* Max Size of Page Headers in Bytes (regardless of type - strictly pad to this size in structs) */
-#define MAX_PAGE_HEADER_SIZE 16  /* Max page header size in bytes - this makes it easier to know when the page data starts and ends. This affects the size of the union of headers */
-#define MAX_JOURNAL_HEADER_SIZE 16  /* Max Size of journal header in bytes 
+#define MAX_PAGE_HEADER_SIZE 32  /* Max page header size in bytes - this makes it easier to know when the page data starts and ends. This affects the size of the union of headers */
+#define MAX_JOURNAL_HEADER_SIZE 32  /* Max Size of journal header in bytes 
                         - Fixed size to make it easier to ensure enough space is reserved to align to 4096B page */
 #define MAX_USABLE_PAGE_SIZE (PAGE_SIZE - MAX_PAGE_HEADER_SIZE - MAX_JOURNAL_HEADER_SIZE) /* Limit usable bytes for data in data pages, 
 excluding the overhead from header of DB page and journal page. 
@@ -86,8 +86,12 @@ Aim for page alignment by padding. */
 #define MAX_COLUMN_NAME_LENGTH 255  /* For Column catalog, Including null terminator */
 
 
-/* Radix Tree free buckets - to determine page has slots to put things in */
-#define NUM_BUCKETS 4
+/* Radix Tree free buckets - to determine page has slots to put things in 
+ * BUCKET_FULL,  // 0-25% free out of MAX_USABLE_PAGE_SIZE
+ * BUCKET_MOSTLY_FULL,  // 25-50% free out of MAX_USABLE_PAGE_SIZE
+ * BUCKET_MOSTLY_EMPTY,  // 50-75% free out of MAX_USABLE_PAGE_SIZE
+ * */
+#define NUM_BUCKETS 3
 
 
 #endif 

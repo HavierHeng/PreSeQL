@@ -56,9 +56,9 @@ typedef struct {
 } PageTracker;  // Radix Tree + Free count - this is used for tracking free pages - this might be more useful
 
 typedef enum {
-    BUCKET_FULL,
-    BUCKET_MOSTLY_FULL,
-    BUCKET_MOSTLY_EMPTY,
+    BUCKET_FULL,  // 0-25% free out of MAX_USABLE_PAGE_SIZE
+    BUCKET_MOSTLY_FULL,  // 25-50% free out of MAX_USABLE_PAGE_SIZE
+    BUCKET_MOSTLY_EMPTY,  // 50-75% free out of MAX_USABLE_PAGE_SIZE
     // BUCKET_EMPTY  // Redundant - if the bucket is empty (e.g after deletion of entries in index/data page), reference count drops to 0 and the page would be marked as freed (adding it back to the free page tracker)
 } FreeSpaceBucket;
 
@@ -101,10 +101,11 @@ uint16_t get_free_page(Pager* pager);
 PSqlStatus sync_free_page_list(Pager* pager);
 
 /* Page Allocation & Initialization */
-DBPage* allocate_page(Pager* pager, uint16_t page_no, PageType type);
+DBPage* allocate_page(Pager* pager, uint16_t page_no);
 
 /* Specialized Factory methods for each type of Pages */
-Page* init_data_page(Pager* pager, uint16_t page_no);
+DBPage* init_data_page(Pager* pager, uint16_t page_no);
+// TODO: Since each page 
 
 /* Core pager functions */
 Pager* pager_open(const char* filename, int flags);  // Opens a pager object - this can be handled over to a PSql object
@@ -112,19 +113,20 @@ PSqlStatus pager_close(Pager* pager);
 PSqlStatus pager_sync(Pager* pager);
 
 /* Page access functions */
-Page* pager_get_page(Pager* pager, uint16_t page_no);
-PSqlStatus pager_write_page(Pager* pager, Page* page);
+DBPage* pager_get_page(Pager* pager, uint16_t page_no);
+PSqlStatus pager_write_page(Pager* pager, DBPage* page);
 
 /* Database initialization */
 PSqlStatus pager_init_new_db(Pager* pager);  // Init a new DB would also clear any existing journal files 
 PSqlStatus pager_verify_db(Pager* pager);  // Checks magic number, size, CRC32 checksum for a valid db file
 
 // TODO: When to vaccum and when to free
-void vaccum_page();  // Vaccums page if flag COMPRESSABLE set and free_page < FREE_SPACE_VACCUM_SIZE - updates all slots but does not change their slot id
+// No need to vaccum index pages - only the data and overflow pages with variable sizes
+void vaccum_page(DBPage);  // Vaccums page if flag COMPRESSABLE set and free_page < FREE_SPACE_VACCUM_SIZE - updates all slots but does not change their slot id
 
 void vaccum_all_pages(Pager *pager);  // For loops over page 1 all the way to highest_page allocated in the db metadata - runs vaccum_page() on each one - this can be done at vm boot
 
-void vaccum_data_pages(FreeSpaceTracker* tracker);  // Vaccum only on 4-bucket radix tree with tracker - this is done when the database is online
+void vaccum_data_pages(FreeSpaceTracker* tracker);  // Vaccum only on 4-bucket radix tree with tracker - this is done when the database is online - i.e only data and overflow pages get this treatment
 
 #endif
 
