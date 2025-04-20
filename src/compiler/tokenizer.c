@@ -196,9 +196,7 @@ void free_tokens(Token **token_stream, size_t token_count) {
     free(token_stream);
 }
 
-Token **tokenize(const char* sql_commands, size_t *token_count) {
-
-    Token **token_stream = NULL;
+int tokenize(const char* sql_commands, Token ***token_stream, size_t *token_count) {
 
     // Maximal Munch Tracking Variables
     size_t sql_commands_len = strlen(sql_commands);
@@ -236,8 +234,8 @@ Token **tokenize(const char* sql_commands, size_t *token_count) {
 
         if (token_type != TOKEN_UNKNOWN) {
             Token *token = create_token(token_type, matched_lexeme, current_line_number);
-            token_stream = (Token **)realloc(token_stream, (*token_count + 1) * sizeof(Token *));
-            token_stream[*token_count] = token;
+            *token_stream = realloc(*token_stream, (*token_count + 1) * sizeof(Token *));
+            (*token_stream)[*token_count] = token;
             (*token_count)++;
             // printf("Token { type: %d, lexeme: '%s', line: %d }\n",
             //     token->type,
@@ -251,12 +249,13 @@ Token **tokenize(const char* sql_commands, size_t *token_count) {
             if (sql_commands[current_position] != ' ' && sql_commands[current_position] != '\n' &&
                 sql_commands[current_position] != '\t' && sql_commands[current_position] != '\r') {
                 printf("Error: Unrecognized character '%c' at line %d\n", sql_commands[current_position], current_line_number);
+                return 1;
             }
             ++current_position;
         }
     }
 
-    return token_stream;
+    return 0;
 }
 
 

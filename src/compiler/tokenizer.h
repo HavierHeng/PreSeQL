@@ -49,7 +49,7 @@ bool is_varchar_literal_regex(const char *lexeme);
 bool is_integer_literal_regex(const char *lexeme);
 bool is_identifier_regex(const char *lexeme);
 
-Token **tokenize(const char *input, size_t *token_count);
+int tokenize(const char *input, Token ***token_stream, size_t *token_count);
 void free_tokens(Token **tokens, size_t count);
 
 #endif
