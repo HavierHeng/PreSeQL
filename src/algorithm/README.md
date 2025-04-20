@@ -11,16 +11,15 @@ In our case, the inputs to the Radix tree are binaries representing the page num
 This is used in a few parts of the code to reuse pages to prevent fragmentation: 
 1) Finding Free pages in Pager 
 2) Free Pages in Journal if Transaction is used - e.g when pages are dirty, we make a copy into a journal for rollback
+3) Sorting Data and Overflow Pages into 3 buckets representing how full they are (FULL, MOSTLY_FULL, MOSTLY_FREE), so that Pages can be quickly found that can still accomodate more slots/data.
 
 This is as pages in the database can get huge in number, and is dynamic in count.
 This job cannot be handled by just a bitmap alone since it scales badly to search the high number of 65535 pages for the lowest available page.
 
-> Note: At first I wanted to use a 4 bucket Radix tree to get the smallest chunk that fits. But thinking back, that is stupid, since the problem definition is that an overflow page has max 255 chunks. 
-> The cost of using a radix tree is lost since linear scan on 255 entries is fast, and the overhead of using radix tree means i have to copy to memory from disk, and dealing with desync issues.
-> I could just scan the chunk entries from disk directly instead.
+> Note: At first I wanted to use a 4 bucket Radix tree to get the smallest chunk that fits as well. But thinking back, that is stupid, since the problem definition is that an overflow page has max 255 chunks. The cost of using a radix tree is lost since linear scan on 255 entries is fast, and the overhead of using radix tree means i have to copy to memory from disk, and dealing with desync issues. I could just scan the chunk entries from disk directly instead.
 
 ## Why not just use a Queue to track free pages?
-Ah ha, good catch.
+Ah ha, good catch. Queue would give me pages to reuse in order of freeing rather than in the lowest page number.
 
 Its the only reason why I'm bothering to sort the free pages is for:
 1. Locality of Reference (Cache Performance)
