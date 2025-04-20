@@ -7,7 +7,7 @@ CFLAGS = -Wall -Wextra -std=c99 -g -I./src
 SRC_DIR = src
 OBJ_DIR = build/obj
 BIN_DIR = build/bin
-TEST_DIR = tests
+TEST_DIR = test
 
 # Source files by category (excluding main files)
 COMPILER_SRCS = $(wildcard $(SRC_DIR)/compiler/*.c)
@@ -53,8 +53,6 @@ preseql: $(OBJS) $(OBJ_DIR)/main.o
 test_radix: $(OBJ_DIR)/algorithm/radix_tree.o $(OBJ_DIR)/tests/test_radix.o
 	$(CC) $(CFLAGS) -o $(BIN_DIR)/$@ $^
 
-# Test Pager Subsystem
-
 # Compile main.c
 $(OBJ_DIR)/main.o: $(SRC_DIR)/main.c
 	$(CC) $(CFLAGS) -c $< -o $@
@@ -71,7 +69,7 @@ $(OBJ_DIR)/%.o: $(SRC_DIR)/%.c
 
 # Clean build artifacts
 clean:
-	rm -rf build
+	rm -rf build/bin/ build/obj/
 
 # Run the main CLI program
 run: preseql

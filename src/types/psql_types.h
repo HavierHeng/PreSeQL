@@ -6,7 +6,6 @@
 #define PRESEQL_TYPES_H
 typedef enum {
     PSQL_NULL,
-    PSQL_PTR,  // Internal datatype, for pointing to other pages (e.g overflow)
     PSQL_INT,
     PSQL_TEXT
 } PSqlDataTypes;

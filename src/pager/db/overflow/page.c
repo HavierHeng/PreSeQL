@@ -1,181 +1,112 @@
-#include "page.h"
+#include "page_format.h"
 #include <string.h>
 
-// Allocate a chunk in an overflow page
+
 int allocate_overflow_chunk(Page* page, uint16_t size, uint8_t* chunk_id) {
-    if (!page || !chunk_id || page->header.type != OVERFLOW) {
-        return -1;
-    }
-    
-    OverflowPageHeader* hdr = &page->header.type_specific.overflow;
-    
-    // Check if there's enough space
+    OverflowPageHeader* hdr = (OverflowPageHeader*)page->data;
+
+    // Not enough space in the overflow page?
     if (hdr->free_bytes < size || hdr->num_chunks >= MAX_OVERFLOW_CHUNKS) {
         return -1;
     }
-    
-    // Allocate a new chunk
-    *chunk_id = hdr->num_chunks;
-    uint16_t offset = hdr->free_offset;
-    
-    // Update chunk table
-    hdr->chunk_table[*chunk_id].chunk_id = *chunk_id;
-    hdr->chunk_table[*chunk_id].offset = offset;
-    hdr->chunk_table[*chunk_id].length = size;
-    
-    // Update header
-    hdr->num_chunks++;
-    hdr->free_offset += size;
-    hdr->free_bytes -= size;
-    hdr->payload_size += size;
-    page->header.dirty = 1;
-    
-    return 0;
-}
 
-// Write data to an overflow chunk
-int write_to_overflow_chunk(Page* page, uint8_t chunk_id, const uint8_t* data, uint16_t size) {
-    if (!page || !data || page->header.type != OVERFLOW) {
-        return -1;
-    }
-    
-    OverflowPageHeader* hdr = &page->header.type_specific.overflow;
-    
-    // Check if chunk exists
-    if (chunk_id >= hdr->num_chunks) {
-        return -1;
-    }
-    
-    // Check if size matches
-    if (hdr->chunk_table[chunk_id].length != size) {
-        return -1;
-    }
-    
-    // Write data
-    uint16_t offset = hdr->chunk_table[chunk_id].offset;
-    memcpy(page->payload + offset, data, size);
-    page->header.dirty = 1;
-    
-    return 0;
-}
-
-// Read data from an overflow chunk
-uint8_t* read_from_overflow_chunk(Page* page, uint8_t chunk_id, uint16_t* size) {
-    if (!page || !size || page->header.type != OVERFLOW) {
-        return NULL;
-    }
-    
-    OverflowPageHeader* hdr = &page->header.type_specific.overflow;
-    
-    // Check if chunk exists
-    if (chunk_id >= hdr->num_chunks) {
-        return NULL;
-    }
-    
-    // Get chunk info
-    uint16_t offset = hdr->chunk_table[chunk_id].offset;
-    *size = hdr->chunk_table[chunk_id].length;
-    
-    return page->payload + offset;
-}
-
-// Delete an overflow chunk
-int delete_overflow_chunk(Page* page, uint8_t chunk_id) {
-    if (!page || page->header.type != OVERFLOW) {
-        return -1;
-    }
-    
-    OverflowPageHeader* hdr = &page->header.type_specific.overflow;
-    
-    // Check if chunk exists
-    if (chunk_id >= hdr->num_chunks) {
-        return -1;
-    }
-    
-    // Get chunk info
-    uint16_t size = hdr->chunk_table[chunk_id].length;
-    
-    // Mark chunk as deleted by setting length to 0
-    hdr->chunk_table[chunk_id].length = 0;
-    
-    // Update header
-    hdr->free_bytes += size;
-    hdr->payload_size -= size;
-    page->header.dirty = 1;
-    
-    // Note: We don't compact the page here, that would be done by a separate vacuum operation
-    
-    return 0;
-}
-
-// Initialize overflow allocator
-OverflowPageAllocator* overflow_allocator_create() {
-    OverflowPageAllocator* alloc = (OverflowPageAllocator*)malloc(sizeof(OverflowPageAllocator));
-    if (!alloc) return NULL;
-    
-    // Initialize buckets
-    for (int i = 0; i < BUCKET_COUNT; i++) {
-        alloc->free_buckets[i] = radix_tree_create();
-        if (!alloc->free_buckets[i]) {
-            // Clean up previously allocated trees
-            for (int j = 0; j < i; j++) {
-                radix_tree_destroy(alloc->free_buckets[j]);
+    // Find a free chunk slot
+    for (int i = 0; i < MAX_OVERFLOW_CHUNKS; ++i) {
+        if (!hdr->chunk_table[i].in_use) {
+            if (hdr->free_offset + size > page->size) {  // Safety check
+                return -1;
             }
-            free(alloc);
-            return NULL;
+
+            // Set up the chunk
+            OverflowChunkMeta* chunk = &hdr->chunk_table[i];
+            chunk->in_use = 1;
+            chunk->offset = hdr->free_offset;
+            chunk->length = size;
+
+            // Update header metadata
+            hdr->free_offset += size;
+            hdr->free_bytes -= size;
+            hdr->payload_size += size;
+            hdr->num_chunks++;
+            hdr->num_chunks_free--; // If reusing a previously freed chunk slot
+
+            *chunk_id = i;
+            return 0;
         }
     }
-    
-    return alloc;
+
+    return -1; // No free slot found
 }
 
-// Destroy overflow allocator
-void overflow_allocator_destroy(OverflowPageAllocator* alloc) {
-    if (!alloc) return;
-    
-    // Free all buckets
-    for (int i = 0; i < BUCKET_COUNT; i++) {
-        if (alloc->free_buckets[i]) {
-            radix_tree_destroy(alloc->free_buckets[i]);
-        }
+uint8_t* read_from_overflow_chunk(Page* page, uint8_t chunk_id, uint16_t* size_out) {
+    OverflowPageHeader* hdr = (OverflowPageHeader*)page->data;
+
+    if (chunk_id >= MAX_OVERFLOW_CHUNKS) return NULL;
+
+    OverflowChunkMeta* chunk = &hdr->chunk_table[chunk_id];
+    if (!chunk->in_use) return NULL;
+
+    if (size_out) {
+        *size_out = chunk->length;
     }
-    
-    free(alloc);
+
+    return page->data + chunk->offset;
 }
 
-// Determine which bucket can fit a chunk of given size
-int get_bucket(size_t chunk_size) {
-    if (chunk_size <= 512) return 0;
-    if (chunk_size <= 1024) return 1;
-    if (chunk_size <= 2048) return 2;
-    if (chunk_size <= MAX_DATA_BYTES - sizeof(OverflowPageHeader)) return 3;
-    return -1; // Too large
-}
+// Vaccum fragmented chunks
+void vacuum_overflow_page(Page* page) {
+    OverflowPageHeader* hdr = (OverflowPageHeader*)page->data;
+    uint8_t* base = page->data;
 
-// Add a page to the appropriate free bucket
-void overflow_allocator_add_page(OverflowPageAllocator* alloc, uint16_t pg_id, size_t free_bytes) {
-    if (!alloc) return;
-    
-    int bucket = get_bucket(free_bytes);
-    if (bucket >= 0 && bucket < BUCKET_COUNT) {
-        radix_tree_insert(alloc->free_buckets[bucket], pg_id, (void*)1);
+    // Temporary buffer to store the compacted chunk data
+    uint8_t compacted[PAGE_SIZE];
+
+    // Start writing data just after the header
+    size_t header_size = offsetof(OverflowPageHeader, chunk_table[MAX_OVERFLOW_CHUNKS]);
+    uint16_t new_offset = header_size;
+
+    // New chunk table to build into
+    OverflowChunkMeta new_chunks[MAX_OVERFLOW_CHUNKS];
+    memset(new_chunks, 0, sizeof(new_chunks));
+
+    uint16_t total_payload = 0;
+    uint8_t new_num_chunks = 0;
+
+    for (int i = 0; i < MAX_OVERFLOW_CHUNKS; ++i) {
+        OverflowChunkMeta* old_chunk = &hdr->chunk_table[i];
+        if (!old_chunk->in_use) continue;
+
+        // Copy chunk data into new compacted location
+        uint8_t* src = base + old_chunk->offset;
+        memcpy(compacted + new_offset, src, old_chunk->length);
+
+        // Build new chunk entry
+        new_chunks[i].in_use = 1;
+        new_chunks[i].offset = new_offset;
+        new_chunks[i].length = old_chunk->length;
+
+        new_offset += old_chunk->length;
+        total_payload += old_chunk->length;
+        new_num_chunks++;
     }
+
+    // Copy compacted data back into original page
+    memcpy(base + header_size, compacted + header_size, total_payload);
+
+    // Write back the updated chunk table
+    memcpy(hdr->chunk_table, new_chunks, sizeof(new_chunks));
+
+    // Update header metadata
+    hdr->free_offset = new_offset;
+    hdr->free_bytes = PAGE_SIZE - new_offset;
+    hdr->payload_size = total_payload;
+    hdr->num_chunks = new_num_chunks;
+
+    // Count freed chunk slots
+    uint8_t free_count = 0;
+    for (int i = 0; i < MAX_OVERFLOW_CHUNKS; ++i) {
+        if (!hdr->chunk_table[i].in_use) free_count++;
+    }
+    hdr->num_chunks_free = free_count;
 }
 
-// Get a page that can fit the needed bytes
-uint16_t overflow_allocator_get_page(OverflowPageAllocator* alloc, size_t needed_bytes) {
-    if (!alloc) return 0;
-    
-    int bucket = get_bucket(needed_bytes);
-    if (bucket < 0) return 0; // Too large
-    
-    // Try to find a page in the appropriate bucket or larger
-    for (int i = bucket; i < BUCKET_COUNT; i++) {
-        int16_t pg_id = radix_tree_pop_min(alloc->free_buckets[i]);
-        if (pg_id > 0) {
-            return pg_id;
-        }
-    }
-    
-    return 0; // No suitable page found
-}
