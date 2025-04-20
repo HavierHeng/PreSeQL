@@ -50,5 +50,5 @@ typedef struct {
     uint8_t payload[MAX_DATA_BYTES];  // The data depends on the page type 
 } DBPage;
 
-#endif /* PRESEQL_PAGER_DB_FORMAT_H */
+#endif
 
