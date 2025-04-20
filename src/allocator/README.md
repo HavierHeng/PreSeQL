@@ -13,3 +13,4 @@ This allows for easy allocation and freeing of huge chunks of nested memory with
 The Arena allocator by default is using libc `malloc()` to allocate large chunks of memory. 
 But it can also use the POSIX style anonymous `mmap()` on Linux and MacOS.
 
+The nice thing about this implementation of Arnea allocator is that its all in one header file. It also has auto resizing of regions by chaining 8KB regions as a big linked list whenever the Arena is filled, meaning I don't have to use any `realloc()` like operations.

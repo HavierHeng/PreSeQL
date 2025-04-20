@@ -11,33 +11,36 @@
 #include <stdint.h>
 #include <stdbool.h>
 #include <unistd.h>
+#include <string.h>
+#include "allocator/arena.h"
 
 #define RADIX_BITS 4
 #define RADIX_SIZE (1 << RADIX_BITS)
 
 typedef struct RadixNode {
     struct RadixNode *children[RADIX_SIZE];  // next level
-    int16_t status; // valid at leaves only (-1 = not free)
+    uint8_t is_free; // valid at leaves only (1 = free, 0 = not free)
 } RadixNode;
 
 typedef struct RadixTree {
     RadixNode root;
+    Arena arena; // Per-tree arena for memory management
 } RadixTree;
 
 RadixTree* radix_tree_create();
 void radix_tree_destroy(RadixTree* tree);
 
 // Basic Radix Tree operations
-void radix_tree_insert(RadixTree *tree, uint16_t page_no, int16_t slot);
+void radix_tree_insert(RadixTree *tree, uint16_t page_no);
 void radix_tree_delete(RadixTree *tree, uint16_t page_no);
-int16_t radix_tree_pop_min(RadixTree *tree);
-int16_t radix_tree_lookup(RadixTree *tree, uint16_t page_no);
+uint16_t radix_tree_pop_min(RadixTree *tree);
+bool radix_tree_lookup(RadixTree *tree, uint16_t page_no);
 
-// Walk while executing callback function - e.g free
+// Walk while executing callback function - e.g., build freelist
 // Allows to pass in a user_data parameter for modifying callback behaviour
-void radix_tree_walk(RadixTree *tree, void (*cb)(uint16_t page, int16_t slot, void* user_data), void* user_data);
+void radix_tree_walk(RadixTree *tree, void (*cb)(uint16_t page, void* user_data), void* user_data);
 
 // Conversion between freelist and radix tree
 void freelist_to_radix(RadixTree* tree, uint16_t* freelist, size_t count);
 size_t radix_to_freelist(RadixTree* tree, uint16_t* freelist, size_t max_size);
-#endif 
+#endif
