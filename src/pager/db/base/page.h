@@ -16,7 +16,21 @@
 | Checksum                | Data corruption and recovery (CRC-32)   |
 */
 
-// TODO: Build this for page 0 
+#include <stdint.h>
+#include "pager/constants.h"
 
-    uint16_t highest_page;  /* By tracking the highest page allocated, 
-                            speeds up the future allocation if no free pages to be reused */
+// Database main header (Page 0)
+typedef struct {
+    char magic[MAGIC_NUMBER_SIZE];      // "SQLSHITE"
+    uint16_t page_size;                 // Usually 4096
+    uint16_t db_version;                // Schema version
+    uint16_t root_table_catalog;        // Page 1
+    uint16_t root_column_catalog;       // Page 2
+    uint16_t root_fk_catalog;           // Page 3
+    uint16_t free_page_list[FREE_PAGE_LIST_SIZE];       // Inline free page list
+    uint16_t free_page_count;           // Number of entries in free_page_list - this allows us to pull off queue operations as it acts as an index
+    uint16_t highest_page;              // Highest allocated page - allows for fall back if there are no free pages cached
+    uint16_t transaction_state;         // For crash recovery
+    uint16_t flags;                     // DB flags
+    uint32_t checksum;                  // CRC-32 checksum
+} DatabaseHeader;

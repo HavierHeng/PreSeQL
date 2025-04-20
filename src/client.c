@@ -1,6 +1,8 @@
 /* Example client application that uses the PreSeQL database 
  * PreSeQL is an embedded database - this means that it needs a client application to make sense
+ * This program can read from stdin or run in CLI mode (default).
  * */
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
