@@ -7,13 +7,13 @@
 #include <stdbool.h>
 #include "opcodes.h"
 #include "status/step.h"
+#include "preseql.h"
 
 /* Forward declarations */
 typedef struct PSqlCursor Cursor;
 typedef int PSqlRegister;  // Using int as the register type for simplicity
 
 //TODO: PSqlStatement to be arena allocated as well - just like radix tree
-
 
 // The VM state is effectively stored into PSqlStatement
 // The statement is the VM state in and of itself
@@ -35,8 +35,11 @@ typedef struct PSqlStatement {
     Cursor **open_cursors;
     int cursor_count;
 
-    // Result status (SQLITE_ROW, SQLITE_DONE, SQLITE_ERROR, etc.)
+    // Step Result status (PSQL_STEP_ROW, PSQL_STEP_DONE, PSQL_STEP_ERROR, etc.)
     PSqlStepStatus result_code;
+
+    // Pager handle for manipulating Database and Journal files
+    PSql *db;
 
     // Optional: error info, current database, etc.
     // Error messages will be passed to psql_err

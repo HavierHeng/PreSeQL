@@ -12,18 +12,22 @@
 typedef struct PSqlDB {
     char *filename;
     int flags;
-    void *pager;  /* Pointer to pager implementation */
-    char *error_msg;
+    void *pager;  /* Pointer to pager implementation - giving it access to the underlying files for DB and Journal */
+    char *error_msg;  /* In case opening the database has an error */
 } PSql;
 
 /* Open/Close DB file, as a read/write database */
 PSqlStatus psql_open(PSql* db);
 PSqlStatus psql_close(PSql* db);
 
-/* Frontend to PreSeQL: Lexer, Parser, Code Generator steps */
-PSqlStatus psql_prepare(PSqlStatement* stmt, char*);
+/* Frontend to PreSeQL: Lexer, Parser, Code Generator steps 
+ * Returns either PSQL_OK or PSQL_ERROR (if invalid)
+ * */
+PSqlStatus psql_prepare(PSql* db, char* sql_query, int query_size, PSqlStatement* stmt);
 
-/* Clean up VM state, but do not clear instructions inside it - i.e rewind */
+/* Clean up VM state, but do not clear instructions inside it - i.e rewind 
+ * Very useful for re-evaluating the same statement without needing to psql_prepare() again.
+ * */
 PSqlStatus psql_reset(PSqlStatement* stmt);
 
 /* Clean up VM state and all instructions inside it */
