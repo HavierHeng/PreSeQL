@@ -21,22 +21,23 @@
 
 
 /* Max Size of Page Headers in Bytes (regardless of type - strictly pad to this size in structs) */
-#define MAX_PAGE_HEADER_SIZE 127  /* Max page header size in bytes - this makes it easier to know when the page data starts and ends */
+#define MAX_PAGE_HEADER_SIZE 127  /* Max page header size in bytes - this makes it easier to know when the page data starts and ends. This affects the size of the union of headers */
 #define MAX_JOURNAL_HEADER_SIZE 31  /* Max Size of journal header in bytes 
                         - Fixed size to make it easier to ensure enough space is reserved to align to 4096B page */
-#define MAX_USABLE_PAGE_BYTES (PAGE_SIZE - MAX_JOURNAL_HEADER_SIZE) /* Limit usable bytes for data in data pages, 
-                                                        since journal has some overhead itself, 
-                                                        but we aim for page alignment */
+#define MAX_USABLE_PAGE_SIZE (PAGE_SIZE - MAX_PAGE_HEADER_SIZE - MAX_JOURNAL_HEADER_SIZE) /* Limit usable bytes for data in data pages, 
+excluding the overhead from header of DB page and journal page. 
+Aim for page alignment by padding. */
 
 
 /* Base Metadata Page */
-#define MAGIC_NUMBER_SIZE 8  /* Magic number is a fixed sized field */
+#define MAGIC_NUMBER_SIZE 8  /* Magic number is a fixed sized field (in bytes) */
 #define MAGIC_NUMBER "SQLSHITE"  /* For magic number */
 #define FREE_PAGE_LIST_BATCH_SIZE 10  /* the number of changes to Radix tree before flushing back to disk free page list */
+// TODO: Radix tree has to be wrapped in another struct that can count the number of changes
 
 
 /* Generic Page flags */
-// Page status flags
+// Page status flags - Apply by AND with the flags field
 #define PAGE_DIRTY 0x01
 #define PAGE_FREE  0x02
 
@@ -48,19 +49,29 @@
 
 
 /* B+ Tree Index Page */
-#define BTREE_ORDER 256 /* Max keys per B+ Tree node 
+#define BTREE_ORDER 255 /* Max keys per B+ Tree node 
                         - i.e max number of children a node can have/fanout. 
                         In reality, this is an upper bound since the key sizes always determine the effective order of the tree 
                         - e.g if a truncated TEXT of 16 bytes is always stored with an overflow pointer of 8 bytes (64-bit system)
                         Max keys is (ORDER-1) for internal nodes, ORDER for leaf nodes */
 
 /* Data Page */
-#define MAX_DATA_PER_SLOT 255  /* Max data for a slot - if exceeded it will go into an Overflow Page - this is reasonable to implement a VARCHAR(255) as TEXT (1 byte is for Null term) */
+#define MAX_DATA_PER_SLOT 16  /* Max data for a slot used in both Data Page and Index Page slotted page. 
+                        All TEXT are truncated to this value. 
+                        NULL will be effectively \0 for all 16 bytes.
+                        INT (64-bit signed) will only use the first 8 bytes and leave the remaining 8 bytes blank.
+                        - if exceeded in data page or index page, it will go into an Overflow Page, and the pointer to overflow page will be set to the overflow page number and chunk.
+                        */
+#define SLOT_VACCUM_BATCH_SIZE 15 /* Threshold for number of deletes to execute a VACCUM operation on slotted pages 
+of Index Page, Data Page and Overflow Page.
+This is as VACCUM operation to move slots are expensive, but fragmentation of slots due to delete operations can make the pages more sparse.
+*/
 
 /* Overflow Page */
-#define MAX_OVERFLOW_CHUNKS 256  /* Max chunks that can be stored in an Overflow page */
+#define MAX_OVERFLOW_CHUNKS 255  /* Max chunks that can be stored in an Overflow page, a chunk is defined as effectively a slot of data */
 
 /* Catalog Pages */
-#define MAX_TABLE_NAME_LENGTH 255  /* Including null terminator */
+#define MAX_TABLE_NAME_LENGTH 255  /* For Table catalog, Including null terminator */
+#define MAX_COLUMN_NAME_LENGTH 255  /* For Table catalog, Including null terminator */
 
 #endif 
