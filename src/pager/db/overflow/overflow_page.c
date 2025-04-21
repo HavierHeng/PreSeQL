@@ -4,7 +4,6 @@
 // TODO: Only for reference - I'll remake this outside
 // allocate_overflow_chunk()
 // read_from_overflow_chunk()
-// vaccum_overflow_chunk() - no need making vaccum_page() would be more efficient given they share the same header
 
 int allocate_overflow_chunk(Page* page, uint16_t size, uint8_t* chunk_id) {
     OverflowPageHeader* hdr = (OverflowPageHeader*)page->data;

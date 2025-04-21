@@ -1,26 +1,63 @@
-#include "pager/db/base/page_format.h"
-#include "pager/constants.h"
-#include "pager/pager.h"
+/* 
+* B+ Tree operations: 1) init/destroy - to create and clean up B+ Tree nodes - implicitly part of init data page (a page is a node) - so maybe no need make - probs just need to implement a Radix tree way to find either a freed page or fallback to highest page ID + 1 (stored in header as metadata)
+* 2) btree_search() - to find entry
+* 3) btree_insert() - to add new rows to the B+ Tree index
+* 4) btree_split_leaf() - when leaf is too full, we have to split it. This also sets up the right sibling pointers that B+ Tree is known for fast linear access.
+* 5) btree_split_interal() - when internal is too small. Its a separate function just due to how internal nodes are routers instead of data pointers.
+* 6) btree_iterator_range() - returns a BTreeIterator (or something similar in idea, name needs to be more consistent), allowing me to get range of values
+* 7) Row* btree_iterator_next(BPlusIterator *it) - steps through the iterator and returns the row stored
+* 8) btree_delete() - to delete entries. This is optional because of the complexity to rebalance the tree after operations, but might be useful. Also when entries are deleted, this also updates some reference counter, updates the free page radix tree and so on. Its a cascade effect.
+*/
 
-/* For both Internal and Leaf Index Pages */
-typedef struct {
-    uint8_t key[MAX_DATA_PER_INDEX_SLOT];   // Up to MAX_DATA_PER_INDEX_SLOT (16) bytes of truncated key - key are encoded specially to be lexicographically sortable
-    uint16_t next_page_id;  // Pointer to next Index page (Internal/leaf) that might contain data
-    uint8_t next_slot_id;  // Pointer to slot in next Index Page - Up to 256 slots per page
-    OverflowPointer overflow;  // Overflow pointer - null if no overflow
-} IndexSlotData;
+#ifndef PRESEQL_PAGER_DB_INDEX_PAGE_H
+#define PRESEQL_PAGER_DB_INDEX_PAGE_H
 
+#include "pager/types.h"
+#include "status/db.h"
 
-init_index_internal_page(Pager* pager, uint16_t page_no);
-init_index_leaf_page(Pager* pager, uint16_t page_no);
+/* BTreeIterator structure - FOr stepping through results of range search */
+typedef struct BTreeIterator {
+    Pager* pager;
+    uint16_t root_page_id;
+    uint16_t current_page_id;
+    uint8_t current_slot_id;
+    uint8_t* start_key;
+    uint8_t* end_key;
+    size_t key_size;
+    int has_range;
+} BTreeIterator;
 
-// Manipulating slots - Index
-// TODO: Should this write to a new struct? And also the slot number
-uint8_t find_empty_index_slot(Pager* pager, uint16_t page_id, uint64_t key_size);  // Since Index pages have an order - its more useful to search for a slot in a specific page for building B+ tree. If the page is not a leaf or internal node, returns 0. Pick slot from free slot list else fallback to highest slot allocated. 
-void read_index_slot(Pager* pager, uint16_t page_id, uint8_t slot_id, IndexSlotData *slot);  // Parse the slot data for use for comparisons
-void write_index_slot(Pager* pager, uint16_t page_id, IndexSlotData *slot); // Pick slot from free_slot_list else fallback to highest. Copies in slot data and sets up a slot entry in the front. Insert slot in order using binary search to find where it should insert at (shift right entries if needed). Updates page header. updates page header as well.
-void free_index_slot(Pager* pager, uint16_t page_id, uint8_t slot_id); 
+/* B+ Tree operations */
+DBPage* init_index_internal_page(Pager* pager, uint16_t page_no);
+DBPage* init_index_leaf_page(Pager* pager, uint16_t page_no);
 
+/* Manipulating slots - Index */
+uint8_t find_empty_index_slot(Pager* pager, uint16_t page_id, uint64_t key_size);
+void read_index_slot(Pager* pager, uint16_t page_id, uint8_t slot_id, IndexSlotData *slot);
+void write_index_slot(Pager* pager, uint16_t page_id, IndexSlotData *slot);
+void free_index_slot(Pager* pager, uint16_t page_id, uint8_t slot_id);
+
+/* Lexicographic comparison - NULL < INT < TEXT */
+uint64_t encode_int_key(int64_t key);  // Key encoding for lexicographic comparison
+int compare_keys(const uint8_t* key1, const uint8_t* key2, size_t key_size);
+
+/* B+ Tree operations */
+PSqlStatus btree_split_leaf(Pager* pager, uint16_t leaf_page_id, uint16_t* new_page_id);
+PSqlStatus btree_split_internal(Pager* pager, uint16_t internal_page_id, uint16_t* new_page_id);
+
+PSqlStatus btree_insert(Pager* pager, uint16_t root_page_id, const uint8_t* key, size_t key_size, uint16_t data_page_id, uint8_t data_slot_id);
+
+void btree_search(Pager* pager, uint16_t root_page_id, const uint8_t* key, size_t key_size, uint16_t* result_page_id, uint8_t* result_slot_id);
+
+PSqlStatus btree_delete(Pager* pager, uint16_t root_page_id, const uint8_t* key, size_t key_size);
+
+/* Iterator and range search functions */
+BTreeIterator* btree_iterator_create(Pager* pager, uint16_t root_page_id);
+BTreeIterator* btree_iterator_range(Pager* pager, uint16_t root_page_id, const uint8_t* start_key, const uint8_t* end_key, size_t key_size);
+int btree_iterator_next(BTreeIterator* iterator, uint16_t* data_page_id, uint8_t* data_slot_id);
+void btree_iterator_destroy(BTreeIterator* iterator);
+
+#endif 
 
 
 

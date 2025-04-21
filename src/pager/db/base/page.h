@@ -16,6 +16,9 @@
 | Checksum                | Data corruption and recovery (CRC-32)   |
 */
 
+#ifndef PRESEQL_PAGER_DB_BASE_PAGE_H
+#define PRESEQL_PAGER_DB_BASE_PAGE_H
+
 #include <stdint.h>
 #include "pager/constants.h"
 
@@ -70,4 +73,6 @@ typedef struct {
     uint8_t data[MAX_USABLE_PAGE_SIZE];  // 4032 bytes - The data depends on the page type - its filled with SlotEntry and Index/Data/OverflowSlotData types
     uint8_t reserved[MAX_JOURNAL_HEADER_SIZE];  // 32 bytes - reserved for Journal later
 } DBPage;
+
+#endif /* PRESEQL_PAGER_DB_BASE_PAGE_H */
 

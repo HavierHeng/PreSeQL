@@ -53,12 +53,25 @@ preseql: $(OBJS) $(OBJ_DIR)/main.o
 test_radix: $(OBJ_DIR)/algorithm/radix_tree.o $(OBJ_DIR)/tests/test_radix.o
 	$(CC) $(CFLAGS) -o $(BIN_DIR)/$@ $^
 
+# Test pager subsystem
+test_pager: $(OBJ_DIR)/pager/pager.o $(OBJ_DIR)/algorithm/radix_tree.o $(OBJ_DIR)/algorithm/crc.o \
+           $(OBJ_DIR)/pager/db/index/btree.o \
+           $(OBJ_DIR)/pager/db/data/data_page.o $(OBJ_DIR)/pager/db/overflow/overflow_page.o \
+           $(OBJ_DIR)/pager/db/free_space.o $(OBJ_DIR)/tests/test_pager.o
+	$(CC) $(CFLAGS) -o $(BIN_DIR)/$@ $^
+
+
 # Compile main.c
 $(OBJ_DIR)/main.o: $(SRC_DIR)/main.c
 	$(CC) $(CFLAGS) -c $< -o $@
 
 # Compile test_radix.c
 $(OBJ_DIR)/tests/test_radix.o: $(TEST_DIR)/test_radix.c
+	@mkdir -p $(OBJ_DIR)/tests
+	$(CC) $(CFLAGS) -c $< -o $@
+
+# Compile test_pager.c
+$(OBJ_DIR)/tests/test_pager.o: $(TEST_DIR)/test_pager.c
 	@mkdir -p $(OBJ_DIR)/tests
 	$(CC) $(CFLAGS) -c $< -o $@
 
@@ -79,5 +92,9 @@ run: preseql
 run_radix: test_radix
 	$(BIN_DIR)/test_radix
 
+# Run the pager test
+run_pager: test_pager
+	$(BIN_DIR)/test_pager
+
 # Phony targets
-.PHONY: all clean run run_radix preseql test_radix
+.PHONY: all clean run run_radix run_pager preseql test_radix test_pager

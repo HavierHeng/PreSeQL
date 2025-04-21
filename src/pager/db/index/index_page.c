@@ -1,384 +1,549 @@
-
-/* 
-* B+ Tree operations: 1) init/destroy - to create and clean up B+ Tree nodes - implicitly part of init data page (a page is a node) - so maybe no need make - probs just need to implement a Radix tree way to find either a freed page or fallback to highest page ID + 1 (stored in header as metadata)
-* 2) btree_search() - to find entry
-* 3) btree_insert() - to add new rows to the B+ Tree index
-* 4) btree_split_leaf() - when leaf is too full, we have to split it. This also sets up the right sibling pointers that B+ Tree is known for fast linear access.
-* 5) btree_split_interal() - when internal is too small. Its a separate function just due to how internal nodes are routers instead of data pointers.
-* 6) btree_iterator_range() - returns a BTreeIterator (or something similar in idea, name needs to be more consistent), allowing me to get range of values
-* 7) Row* btree_iterator_next(BPlusIterator *it) - steps through the iterator and returns the row stored
-* 8) btree_delete() - to delete entries. This is optional because of the complexity to rebalance the tree after operations, but might be useful. Also when entries are deleted, this also updates some reference counter, updates the free page radix tree and so on. Its a cascade effect.
-*/
-
-#include "types/psql_types.h"
-#include <stdint.h>
+#include "index_page.h"
 #include <string.h>
+#include <stdlib.h>
+
+// Helper macros - some are for measuring when to split
+// B+ tree has no fixed order - its an effective order based on size of slot data
+#define IS_LEAF(page) ((page)->header.flag & PAGE_INDEX_LEAF)
+#define IS_INTERNAL(page) ((page)->header.flag & PAGE_INDEX_INTERNAL)
+#define USED_SPACE(page) (MAX_USABLE_PAGE_SIZE - (page)->header.free_total)
+#define FULL_THRESHOLD (MAX_USABLE_PAGE_SIZE * INDEX_FULL_OCCUPANCY) // 80% of 4032 bytes
+#define MIN_THRESHOLD (MAX_USABLE_PAGE_SIZE * INDEX_MIN_OCCUPANCY)   // 40% of 4032 bytes
 
 
-// Iterator for range queries
-typedef struct {
-    BPlusTree* tree;
-    page_id_t current_page;
-    uint16_t current_entry;
-    uint8_t end_prefix[PREFIX_SIZE]; // End of range (inclusive)
-    int has_end; // 1 if range has end
-} BPlusIterator;
-
-// Page storage (simplified in-memory)
-Node* allocate_page(BPlusTree* tree) {
-    Node* node = (Node*)calloc(1, PAGE_SIZE);
-    tree->pages[tree->next_page_id] = node;
-    tree->next_page_id++;
-    return node;
-}
-
-Node* get_page(BPlusTree* tree, page_id_t page_id) {
-    return tree->pages[page_id];
-}
-
-// Encode INTEGER key (2^63 offset)
-// Use of an XOR trick - since two's complement means negative values start with a bit of 1, doing an XOR with 0x80000000... will flip the value
-// In effect, we remap from (-2^63) - (2^63-1) to 0 - (2^64-1)
+// Encode INTEGER key for lexicographic comparison
+// Uses XOR trick to offset 2^63
 uint64_t encode_int_key(int64_t value) {
     return (uint64_t)value ^ 0x8000000000000000ULL;
 }
 
-// Compare prefixes (lexicographic)
-int compare_prefix(const uint8_t* prefix1, const uint8_t* prefix2) {
-    return memcmp(prefix1, prefix2, PREFIX_SIZE);
+// Compare two keys lexicographically
+int compare_keys(const uint8_t* key1, const uint8_t* key2, size_t key_size) {
+    return memcmp(key1, key2, key_size);
 }
 
-// Compare entries (including overflow for TEXT)
-int compare(BPlusTree* tree, const NodeEntry* entry1, const NodeEntry* entry2) {
-    // Compare directly lexicographically - logic works on encoded int and null as well
-    int prefix_cmp = compare_prefix(entry1->prefix, entry2->prefix);
-    if (prefix_cmp != 0) return prefix_cmp;
-
-    // Prefix comparison is insufficent to tell if equal - check for overflow pointers
-    // Both no overflow pointer - actually equal in value - logic works on encoded int and null too
-    if (entry1->overflow_ptr == 0 && entry2->overflow_ptr == 0) return 0;
-
-    // If first entry has an overflow pointer - first entry is always going to be larger in value lexicographically - return first > second (-1)
-    if (entry1->overflow_ptr == 0) return -1;
-
-    // If second entry has an overflow pointer - second entry is always going to be larger in value lexicographically - return second > first (1)
-    if (entry2->overflow_ptr == 0) return 1;
-    // Assume overflow stores TEXT remainder (simplified)
-    char* full_key1 = (char*)get_page(tree, entry1->overflow_ptr);
-    char* full_key2 = (char*)get_page(tree, entry2->overflow_ptr);
-    return strcmp(full_key1, full_key2);
-}
-
-BPlusTree* btree_init() {
-    BPlusTree* tree = (BPlusTree*)malloc(sizeof(BPlusTree));
-    tree->root_id = 0;
-    tree->next_page_id = 1;
-    memset(tree->pages, 0, sizeof(tree->pages));
+// Initialize an internal index page
+DBPage* init_index_internal_page(Pager* pager, uint16_t page_no) {
+    DBPage* page = pager_get_page(pager, page_no);
+    if (!page) return NULL;
     
-    // Create root (initially a leaf)
-    Node* root = allocate_page(tree);
-    root->type = NODE_LEAF;
-    root->num_entries = 0;
-    root->right_sibling = 0;
-    tree->root_id = tree->next_page_id - 1;
-    return tree;
+    memset(&page->header, 0, sizeof(DBPageHeader));
+    page->header.page_id = page_no;
+    page->header.flag = PAGE_INDEX_INTERNAL;
+    page->header.free_start = sizeof(DBPageHeader);
+    page->header.free_end = MAX_USABLE_PAGE_SIZE;
+    page->header.free_total = MAX_USABLE_PAGE_SIZE - sizeof(DBPageHeader);
+    page->header.right_sibling_page_id = 0;
+    
+    pager_write_page(pager, page);
+    return page;
 }
 
-// 1) Destroy B+ tree
-void btree_destroy(BPlusTree* tree) {
-    for (uint32_t i = 1; i < tree->next_page_id; i++) {
-        if (tree->pages[i]) free(tree->pages[i]);
+// Initialize a leaf index page
+DBPage* init_index_leaf_page(Pager* pager, uint16_t page_no) {
+    DBPage* page = pager_get_page(pager, page_no);
+    if (!page) return NULL;
+    
+    memset(&page->header, 0, sizeof(DBPageHeader));
+    page->header.page_id = page_no;
+    page->header.flag = PAGE_INDEX_LEAF;
+    page->header.free_start = sizeof(DBPageHeader);
+    page->header.free_end = MAX_USABLE_PAGE_SIZE;
+    page->header.free_total = MAX_USABLE_PAGE_SIZE - sizeof(DBPageHeader);
+    page->header.right_sibling_page_id = 0;
+    
+    pager_write_page(pager, page);
+    return page;
+}
+
+// Find an empty slot in an index page
+uint8_t find_empty_index_slot(Pager* pager, uint16_t page_id, uint64_t key_size) {
+    DBPage* page = pager_get_page(pager, page_id);
+    if (!page || key_size > MAX_DATA_PER_INDEX_SLOT) return 0;
+    
+    if (page->header.free_slot_count > 0) {
+        uint8_t slot_id = page->header.free_slot_list[page->header.free_slot_count - 1];
+        page->header.free_slot_count--;
+        return slot_id;
     }
-    free(tree);
+    
+    // Check if there's enough space for a new slot
+    if (USED_SPACE(page) < FULL_THRESHOLD && page->header.free_total >= (INDEX_SLOT_DATA_SIZE + SLOT_ENTRY_SIZE)) {
+        page->header.highest_slot++;
+        return page->header.highest_slot;
+    }
+    
+    return 0;
 }
 
-/* Searching
-* Start from root - find appropriate leaf node to insert key
-* This can be done by comparing key with key in current node - if key is less than a key in the node, follow child pointer, else if key is greater, move to next key or child pointer
-* Cotinue process until reached leaf node
-* Look for the key in the leaf node (this key points to a data page no.)
-*/
-NodeEntry* btree_search(BPlusTree* tree, const uint8_t* prefix, page_id_t* page_id, uint16_t* entry_idx) {
-    Node* node = get_page(tree, tree->root_id);
-    while (node) {
-        if (node->type == NODE_LEAF) {
-            for (uint16_t i = 0; i < node->num_entries; i++) {
-                int cmp = compare_prefix(prefix, node->entries[i].prefix);
-                if (cmp == 0) {
-                    *page_id = tree->root_id;
-                    *entry_idx = i;
-                    return &node->entries[i];
-                }
-                if (cmp < 0) break;
-            }
-            return NULL; // Not found
-        } else {
-            // Internal node: find child
-            for (uint16_t i = 0; i < node->num_entries; i++) {
-                if (compare_prefix(prefix, node->entries[i].prefix) < 0) {
-                    node = get_page(tree, node->entries[i].child_ptr);
-                    break;
-                }
-            }
-            // Last child if prefix >= all keys
-            node = get_page(tree, node->entries[node->num_entries].child_ptr);
+// Read an index slot
+void read_index_slot(Pager* pager, uint16_t page_id, uint8_t slot_id, IndexSlotData* slot) {
+    DBPage* page = pager_get_page(pager, page_id);
+    if (!page || slot_id >= page->header.total_slots) return;
+    
+    SlotEntry* entry = (SlotEntry*)(page->data + page->header.free_start);
+    for (uint8_t i = 0; i < page->header.total_slots; i++) {
+        if (entry[i].slot_id == slot_id) {
+            memcpy(slot->key, page->data + entry[i].offset, entry[i].size);
+            slot->next_page_id = *(uint16_t*)(page->data + entry[i].offset + entry[i].size);
+            slot->next_slot_id = *(uint8_t*)(page->data + entry[i].offset + entry[i].size + 2);
+            slot->overflow.next_page_id = *(uint16_t*)(page->data + entry[i].offset + entry[i].size + 3);
+            slot->overflow.next_chunk_id = *(uint16_t*)(page->data + entry[i].offset + entry[i].size + 5);
+            break;
         }
     }
-    return NULL;
 }
 
-// Split a leaf node
-void btree_split_leaf(BPlusTree* tree, Node* leaf, page_id_t leaf_id) {
-    Node* new_leaf = allocate_page(tree);
-    page_id_t new_leaf_id = tree->next_page_id - 1;
-    new_leaf->type = NODE_LEAF;
+// Write an index slot
+void write_index_slot(Pager* pager, uint16_t page_id, IndexSlotData* slot) {
+    DBPage* page = pager_get_page(pager, page_id);
+    if (!page || USED_SPACE(page) >= FULL_THRESHOLD) return;
     
-    // Split entries (roughly half)
-    uint16_t split_idx = leaf->num_entries / 2;
-    new_leaf->num_entries = leaf->num_entries - split_idx;
-    memcpy(new_leaf->entries, leaf->entries + split_idx, new_leaf->num_entries * ENTRY_SIZE);
-    leaf->num_entries = split_idx;
+    uint8_t slot_id = find_empty_index_slot(pager, page_id, MAX_DATA_PER_INDEX_SLOT);
+    if (slot_id == 0) return;
     
-    // Set right sibling
-    new_leaf->right_sibling = leaf->right_sibling;
-    leaf->right_sibling = new_leaf_id;
-    
-    // Update parent
-    Node* parent = get_page(tree, leaf_id); // Simplified: assume parent known
-    if (!parent) {
-        // Create new root
-        parent = allocate_page(tree);
-        parent->type = NODE_INTERNAL;
-        tree->root_id = tree->next_page_id - 1;
-    }
-    
-    // Insert new key and pointer into parent
-    NodeEntry new_entry;
-    memcpy(new_entry.prefix, new_leaf->entries[0].prefix, PREFIX_SIZE);
-    new_entry.overflow_ptr = 0;
-    new_entry.child_ptr = new_leaf_id;
-    
-    uint16_t i;
-    for (i = 0; i < parent->num_entries; i++) {
-        if (compare(tree, &new_entry, &parent->entries[i]) < 0) break;
-    }
-    memmove(&parent->entries[i + 1], &parent->entries[i], (parent->num_entries - i) * ENTRY_SIZE);
-    parent->entries[i] = new_entry;
-    parent->num_entries++;
-    
-    if (parent->num_entries > MAX_ENTRIES) {
-        btree_split_internal(tree, parent, tree->root_id);
-    }
-}
-
-// 5) Split an internal node
-void btree_split_internal(BPlusTree* tree, Node* internal, page_id_t internal_id) {
-    Node* new_internal = allocate_page(tree);
-    page_id_t new_internal_id = tree->next_page_id - 1;
-    new_internal->type = NODE_INTERNAL;
-    
-    // Split entries
-    uint16_t split_idx = internal->num_entries / 2;
-    new_internal->num_entries = internal->num_entries - split_idx - 1;
-    memcpy(new_internal->entries, internal->entries + split_idx + 1, new_internal->num_entries * ENTRY_SIZE);
-    internal->num_entries = split_idx;
-    
-    // Middle key goes to parent
-    NodeEntry middle;
-    memcpy(&middle, &internal->entries[split_idx], ENTRY_SIZE);
-    
-    // Update parent
-    Node* parent = get_page(tree, internal_id); // Simplified
-    if (!parent) {
-        parent = allocate_page(tree);
-        parent->type = NODE_INTERNAL;
-        tree->root_id = tree->next_page_id - 1;
-    }
-    
-    uint16_t i;
-    for (i = 0; i < parent->num_entries; i++) {
-        if (compare(tree, &middle, &parent->entries[i]) < 0) break;
-    }
-    memmove(&parent->entries[i + 1], &parent->entries[i], (parent->num_entries - i) * ENTRY_SIZE);
-    parent->entries[i] = middle;
-    parent->entries[i].child_ptr = new_internal_id;
-    parent->num_entries++;
-    
-    if (parent->num_entries > MAX_ENTRIES) {
-        btree_split_internal(tree, parent, tree->root_id);
-    }
-}
-
-/* Insertion
-* Start from root - find appropraite leaf node to insert key
-* Insert key in leaf node in sorted order
-* If the leaf exceeds max order (> m-1) - split the node by creating a new parent internal node. Promote middle key to parent node.
-* If parent node also overflows, repeat splitting process up to root
-* Link leaf nodes as right siblings after split
-*/
-void btree_insert(BPlusTree* tree, const uint8_t* prefix, page_id_t overflow_ptr, page_id_t data_page_id, slot_id_t slot_id) {
-    Node* node = get_page(tree, tree->root_id);
-    
-    // Traverse to leaf
-    while (node->type == NODE_INTERNAL) {
-        uint16_t i;
-        for (i = 0; i < node->num_entries; i++) {
-            if (compare_prefix(prefix, node->entries[i].prefix) < 0) break;
-        }
-        node = get_page(tree, node->entries[i].child_ptr);
-    }
-    
-    // Insert into leaf
-    NodeEntry new_entry;
-    memcpy(new_entry.prefix, prefix, PREFIX_SIZE);
-    new_entry.overflow_ptr = overflow_ptr;
-    new_entry.value_ptr.page_id = data_page_id;
-    new_entry.value_ptr.slot_id = slot_id;
-    
-    uint16_t i;
-    for (i = 0; i < node->num_entries; i++) {
-        int cmp = compare(tree, &new_entry, &node->entries[i]);
-        if (cmp == 0 && memcmp(prefix, "\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0", PREFIX_SIZE) == 0) {
-            // NULL before -2^63
-            if (node->entries[i].value_ptr.page_id != 0) break;
-        }
-        if (cmp <= 0) break;
-    }
-    
-    memmove(&node->entries[i + 1], &node->entries[i], (node->num_entries - i) * ENTRY_SIZE);
-    node->entries[i] = new_entry;
-    node->num_entries++;
-    
-    if (node->num_entries > MAX_ENTRIES) {
-        btree_split_leaf(tree, node, tree->root_id);
-    }
-}
-
-/* Range query (in-order traversal using right sibling pointer)
-* Start from root and find the leaf node containing the starting key of the range (can use search)
-* Visit each key in the current leaf node tht falls within the range
-* follow the pointer to the next right sibling and repeat until all the keys in the range are found
-*/
-BPlusIterator* btree_iterator_range(BPlusTree* tree, const uint8_t* start_prefix, const uint8_t* end_prefix) {
-    BPlusIterator* it = (BPlusIterator*)malloc(sizeof(BPlusIterator));
-    it->tree = tree;
-    it->current_page = 0;
-    it->current_entry = 0;
-    it->has_end = (end_prefix != NULL);
-    if (it->has_end) {
-        memcpy(it->end_prefix, end_prefix, PREFIX_SIZE);
-    }
-    
-    // Find first leaf with start_prefix
-    Node* node = get_page(tree, tree->root_id);
-    while (node->type == NODE_INTERNAL) {
-        uint16_t i;
-        for (i = 0; i < node->num_entries; i++) {
-            if (compare_prefix(start_prefix, node->entries[i].prefix) < 0) break;
-        }
-        node = get_page(tree, node->entries[i].child_ptr);
-    }
-    
-    // Find first entry >= start_prefix
-    for (uint16_t i = 0; i < node->num_entries; i++) {
-        if (compare_prefix(start_prefix, node->entries[i].prefix) <= 0) {
-            it->current_page = tree->root_id;
-            it->current_entry = i;
-            return it;
-        }
-    }
-    
-    // No entries in range
-    it->current_page = 0;
-    return it;
-}
-
-// 7) Get next row from iterator
-Row* btree_iterator_next(BPlusIterator* it) {
-    if (!it->current_page) return NULL;
-    
-    Node* node = get_page(it->tree, it->current_page);
-    if (it->current_entry >= node->num_entries) {
-        // Move to next leaf
-        it->current_page = node->right_sibling;
-        it->current_entry = 0;
-        if (!it->current_page) return NULL;
-        node = get_page(it->tree, it->current_page);
-    }
-    
-    // Check if past end_prefix
-    if (it->has_end && compare_prefix(node->entries[it->current_entry].prefix, it->end_prefix) > 0) {
-        it->current_page = 0;
-        return NULL;
-    }
-    
-    // Simplified: Return row from data page
-    NodeEntry* entry = &node->entries[it->current_entry];
-    Row* row = (Row*)malloc(sizeof(Row));
-    // Assume data page access (mock)
-    row->type = TYPE_INT; // Simplified
-    row->int_value = 0; // Mock: fetch from data page
-    it->current_entry++;
-    return row;
-}
-
-/* Deletion - (this one is harder due to redistribution)
-* Start from root - find leaf node containing key
-* Remove the key from leaf node
-* Merge of redistribute nodes:
-*   If leaf node < m/2 keys after deletion, merge or redistribute nodes
-*   If merging remove the corresponding key from parent and merge nodes
-*   If paarent node underflows, repeat process up to root
-*/
-void btree_delete(BPlusTree* tree, const uint8_t* prefix) {
-    Node* node = get_page(tree, tree->root_id);
-    Node* parent = NULL;
-    uint16_t parent_idx = 0;
-    
-    // Traverse to leaf
-    while (node->type == NODE_INTERNAL) {
-        parent = node;
-        uint16_t i;
-        for (i = 0; i < node->num_entries; i++) {
-            if (compare_prefix(prefix, node->entries[i].prefix) < 0) break;
-        }
-        parent_idx = i;
-        node = get_page(tree, node->entries[i].child_ptr);
-    }
-    
-    // Find and delete entry
-    uint16_t i;
-    for (i = 0; i < node->num_entries; i++) {
-        if (compare_prefix(prefix, node->entries[i].prefix) == 0) {
-            memmove(&node->entries[i], &node->entries[i + 1], (node->num_entries - i - 1) * ENTRY_SIZE);
-            node->num_entries--;
+    // Find insertion point for sorted order
+    SlotEntry* entries = (SlotEntry*)(page->data + page->header.free_start);
+    uint8_t insert_pos = page->header.total_slots;
+    for (uint8_t i = 0; i < page->header.total_slots; i++) {
+        IndexSlotData existing;
+        read_index_slot(pager, page_id, entries[i].slot_id, &existing);
+        if (compare_keys(slot->key, existing.key, MAX_DATA_PER_INDEX_SLOT) < 0) {
+            insert_pos = i;
             break;
         }
     }
     
-    // Rebalance if underflow
-    if (node->num_entries < MIN_ENTRIES && parent) {
-        // Simplified: Merge with sibling or borrow
-        Node* sibling = get_page(tree, parent->entries[parent_idx + 1].child_ptr);
-        if (sibling && sibling->num_entries > MIN_ENTRIES) {
-            // Borrow from right sibling
-            node->entries[node->num_entries] = sibling->entries[0];
-            node->num_entries++;
-            memmove(sibling->entries, sibling->entries + 1, (sibling->num_entries - 1) * ENTRY_SIZE);
-            sibling->num_entries--;
-            // Update parent key
-            memcpy(parent->entries[parent_idx].prefix, sibling->entries[0].prefix, PREFIX_SIZE);
-        } else {
-            // Merge with right sibling
-            memcpy(&node->entries[node->num_entries], sibling->entries, sibling->num_entries * ENTRY_SIZE);
-            node->num_entries += sibling->num_entries;
-            node->right_sibling = sibling->right_sibling;
-            // Remove sibling from parent
-            memmove(&parent->entries[parent_idx], &parent->entries[parent_idx + 1], (parent->num_entries - parent_idx - 1) * ENTRY_SIZE);
-            parent->num_entries--;
-            free(sibling);
+    // Shift entries if needed
+    if (insert_pos < page->header.total_slots) {
+        memmove(&entries[insert_pos + 1], &entries[insert_pos], (page->header.total_slots - insert_pos) * sizeof(SlotEntry));
+    }
+    
+    // Write slot data
+    uint64_t offset = page->header.free_end - INDEX_SLOT_DATA_SIZE;
+    memcpy(page->data + offset, slot->key, MAX_DATA_PER_INDEX_SLOT);
+    *(uint16_t*)(page->data + offset + MAX_DATA_PER_INDEX_SLOT) = slot->next_page_id;
+    *(uint8_t*)(page->data + offset + MAX_DATA_PER_INDEX_SLOT + 2) = slot->next_slot_id;
+    *(uint16_t*)(page->data + offset + MAX_DATA_PER_INDEX_SLOT + 3) = slot->overflow.next_page_id;
+    *(uint16_t*)(page->data + offset + MAX_DATA_PER_INDEX_SLOT + 5) = slot->overflow.next_chunk_id;
+    
+    // Update slot entry
+    entries[insert_pos].slot_id = slot_id;
+    entries[insert_pos].offset = offset;
+    entries[insert_pos].size = MAX_DATA_PER_INDEX_SLOT;
+    
+    // Update header
+    page->header.total_slots++;
+    page->header.free_end = offset;
+    page->header.free_total -= (INDEX_SLOT_DATA_SIZE + SLOT_ENTRY_SIZE);
+    
+    pager_write_page(pager, page);
+}
+
+// Free an index slot
+void free_index_slot(Pager* pager, uint16_t page_id, uint8_t slot_id) {
+    DBPage* page = pager_get_page(pager, page_id);
+    if (!page || slot_id >= page->header.total_slots) return;
+    
+    SlotEntry* entries = (SlotEntry*)(page->data + page->header.free_start);
+    for (uint8_t i = 0; i < page->header.total_slots; i++) {
+        if (entries[i].slot_id == slot_id) {
+            memmove(&entries[i], &entries[i + 1], (page->header.total_slots - i - 1) * sizeof(SlotEntry));
+            page->header.total_slots--;
+            page->header.free_slot_list[page->header.free_slot_count++] = slot_id;
+            page->header.free_total += entries[i].size + sizeof(SlotEntry);
+            pager_write_page(pager, page);
+            break;
         }
     }
 }
 
-#endif
+// Initialize a new B+ tree
+PSqlStatus btree_init(Pager* pager, const char* table_name, uint8_t index_type, uint16_t* out_root_page) {
+    uint16_t root_page_id = get_free_page(pager);
+    if (root_page_id == 0) return PSQL_STATUS_OUT_OF_MEMORY;
+    
+    DBPage* root = init_index_leaf_page(pager, root_page_id);
+    if (!root) {
+        mark_page_free(pager, root_page_id);
+        return PSQL_STATUS_IO_ERROR;
+    }
+    
+    uint16_t table_id;
+    PSqlStatus status = catalog_add_table(table_name, root_page_id, index_type, 0, &table_id);
+    if (status != PSQL_STATUS_OK) {
+        mark_page_free(pager, root_page_id);
+        return status;
+    }
+    
+    *out_root_page = root_page_id;
+    return PSQL_STATUS_OK;
+}
+
+// Destroy a B+ tree
+PSqlStatus btree_destroy(Pager* pager, uint16_t root_page_id) {
+    DBPage* page = pager_get_page(pager, root_page_id);
+    if (!page) return PSQL_STATUS_INVALID_PAGE;
+    
+    if (IS_INTERNAL(page)) {
+        for (uint8_t i = 0; i < page->header.total_slots; i++) {
+            IndexSlotData slot;
+            read_index_slot(pager, root_page_id, i, &slot);
+            btree_destroy(pager, slot.next_page_id);
+        }
+    }
+    
+    for (uint8_t i = 0; i < page->header.total_slots; i++) {
+        IndexSlotData slot;
+        read_index_slot(pager, root_page_id, i, &slot);
+        if (slot.overflow.next_page_id != 0) {
+            mark_page_free(pager, slot.overflow.next_page_id);
+        }
+        if (IS_LEAF(page)) {
+            DBPage* data_page = pager_get_page(pager, slot.next_page_id);
+            if (data_page) {
+                data_page->header.ref_counter--;
+                if (data_page->header.ref_counter == 0) {
+                    mark_page_free(pager, slot.next_page_id);
+                } else {
+                    vaccum_page(data_page);
+                }
+                pager_write_page(pager, data_page);
+            }
+        }
+    }
+    
+    mark_page_free(pager, root_page_id);
+    return PSQL_STATUS_OK;
+}
+
+// Search for a key in the B+ tree
+PSqlStatus btree_search(Pager* pager, uint16_t root_page_id, const uint8_t* key, size_t key_size, uint16_t* result_page_id, uint8_t* result_slot_id) {
+    if (key_size > MAX_DATA_PER_INDEX_SLOT) return PSQL_STATUS_INVALID_ARGUMENT;
+    
+    DBPage* page = pager_get_page(pager, root_page_id);
+    if (!page) return PSQL_STATUS_INVALID_PAGE;
+    
+    while (page) {
+        if (IS_LEAF(page)) {
+            for (uint8_t i = 0; i < page->header.total_slots; i++) {
+                IndexSlotData slot;
+                read_index_slot(pager, page->header.page_id, i, &slot);
+                int cmp = compare_keys(key, slot.key, key_size);
+                if (cmp == 0) {
+                    *result_page_id = page->header.page_id;
+                    *result_slot_id = i;
+                    return PSQL_STATUS_OK;
+                }
+                if (cmp < 0) break;
+            }
+            return PSQL_STATUS_NOT_FOUND;
+        } else {
+            uint8_t i;
+            for (i = 0; i < page->header.total_slots; i++) {
+                IndexSlotData slot;
+                read_index_slot(pager, page->header.page_id, i, &slot);
+                if (compare_keys(key, slot.key, key_size) < 0) break;
+            }
+            IndexSlotData slot;
+            read_index_slot(pager, page->header.page_id, i, &slot);
+            page = pager_get_page(pager, slot.next_page_id);
+        }
+    }
+    
+    return PSQL_STATUS_NOT_FOUND;
+}
+
+// Insert a key-value pair into the B+ tree
+PSqlStatus btree_insert(Pager* pager, uint16_t root_page_id, const uint8_t* key, size_t key_size, uint16_t data_page_id, uint8_t data_slot_id) {
+    if (key_size > MAX_DATA_PER_INDEX_SLOT) return PSQL_STATUS_INVALID_ARGUMENT;
+    
+    if (root_page_id == 0) {
+        root_page_id = get_free_page(pager);
+        if (root_page_id == 0) return PSQL_STATUS_OUT_OF_MEMORY;
+        init_index_leaf_page(pager, root_page_id);
+    }
+    
+    DBPage* page = pager_get_page(pager, root_page_id);
+    if (!page) return PSQL_STATUS_INVALID_PAGE;
+    
+    // Traverse to leaf
+    while (IS_INTERNAL(page)) {
+        uint8_t i;
+        for (i = 0; i < page->header.total_slots; i++) {
+            IndexSlotData slot;
+            read_index_slot(pager, page->header.page_id, i, &slot);
+            if (compare_keys(key, slot.key, key_size) < 0) break;
+        }
+        IndexSlotData slot;
+        read_index_slot(pager, page->header.page_id, i, &slot);
+        page = pager_get_page(pager, slot.next_page_id);
+    }
+    
+    // Insert into leaf
+    IndexSlotData new_slot = {0};
+    memcpy(new_slot.key, key, key_size);
+    new_slot.next_page_id = data_page_id;
+    new_slot.next_slot_id = data_slot_id;
+    
+    write_index_slot(pager, page->header.page_id, &new_slot);
+    
+    // Check for overflow and split if needed
+    if (USED_SPACE(page) > FULL_THRESHOLD) {
+        uint16_t new_page_id;
+        PSqlStatus status = btree_split_leaf(pager, page->header.page_id, &new_page_id);
+        if (status != PSQL_STATUS_OK) return status;
+        
+        // Update parent (simplified: assume root split for now)
+        if (page->header.page_id == root_page_id) {
+            uint16_t new_root_id = get_free_page(pager);
+            if (new_root_id == 0) return PSQL_STATUS_OUT_OF_MEMORY;
+            
+            DBPage* new_root = init_index_internal_page(pager, new_root_id);
+            IndexSlotData parent_slot = {0};
+            read_index_slot(pager, new_page_id, 0, &parent_slot);
+            parent_slot.next_page_id = page->header.page_id;
+            write_index_slot(pager, new_root_id, &parent_slot);
+            
+            parent_slot.next_page_id = new_page_id;
+            write_index_slot(pager, new_root_id, &parent_slot);
+            
+            // Update catalog with new root (requires catalog access)
+            // For simplicity, assume root_page_id is updated externally
+        }
+    }
+    
+    return PSQL_STATUS_OK;
+}
+
+// Delete a key from the B+ tree
+PSqlStatus btree_delete(Pager* pager, uint16_t root_page_id, const uint8_t* key, size_t key_size) {
+    if (key_size > MAX_DATA_PER_INDEX_SLOT) return PSQL_STATUS_INVALID_ARGUMENT;
+    
+    DBPage* page = pager_get_page(pager, root_page_id);
+    if (!page) return PSQL_STATUS_INVALID_PAGE;
+    
+    DBPage* parent = NULL;
+    uint8_t parent_idx = 0;
+    
+    // Traverse to leaf
+    while (IS_INTERNAL(page)) {
+        parent = page;
+        uint8_t i;
+        for (i = 0; i < page->header.total_slots; i++) {
+            IndexSlotData slot;
+            read_index_slot(pager, page->header.page_id, i, &slot);
+            if (compare_keys(key, slot.key, key_size) < 0) break;
+        }
+        parent_idx = i;
+        IndexSlotData slot;
+        read_index_slot(pager, page->header.page_id, i, &slot);
+        page = pager_get_page(pager, slot.next_page_id);
+    }
+    
+    // Find and delete entry
+    for (uint8_t i = 0; i < page->header.total_slots; i++) {
+        IndexSlotData slot;
+        read_index_slot(pager, page->header.page_id, i, &slot);
+        if (compare_keys(key, slot.key, key_size) == 0) {
+            free_index_slot(pager, page->header.page_id, i);
+            break;
+        }
+    }
+    
+    // Rebalance if underflow - can be told by the threshold occupancy
+    if (USED_SPACE(page) < MIN_THRESHOLD && parent) {
+        IndexSlotData parent_slot;
+        read_index_slot(pager, parent->header.page_id, parent_idx, &parent_slot);
+        DBPage* sibling = pager_get_page(pager, parent_slot.next_page_id);
+        if (sibling && USED_SPACE(sibling) > MIN_THRESHOLD) {
+            // Borrow from sibling
+            IndexSlotData sibling_slot;
+            read_index_slot(pager, sibling->header.page_id, 0, &sibling_slot);
+            write_index_slot(pager, page->header.page_id, &sibling_slot);
+            free_index_slot(pager, sibling->header.page_id, 0);
+            
+            // Update parent key
+            read_index_slot(pager, sibling->header.page_id, 0, &parent_slot);
+            write_index_slot(pager, parent->header.page_id, &parent_slot);
+        } else {
+            // Merge with sibling
+            for (uint8_t i = 0; i < sibling->header.total_slots; i++) {
+                IndexSlotData sibling_slot;
+                read_index_slot(pager, sibling->header.page_id, i, &sibling_slot);
+                write_index_slot(pager, page->header.page_id, &sibling_slot);
+            }
+            page->header.right_sibling_page_id = sibling->header.right_sibling_page_id;
+            free_index_slot(pager, parent->header.page_id, parent_idx);
+            mark_page_free(pager, sibling->header.page_id);
+        }
+    }
+    
+    return PSQL_STATUS_OK;
+}
+
+// Split a leaf node
+PSqlStatus btree_split_leaf(Pager* pager, uint16_t leaf_page_id, uint16_t* new_page_id) {
+    DBPage* leaf_page = pager_get_page(pager, leaf_page_id);
+    if (!leaf_page || !IS_LEAF(leaf_page)) return PSQL_STATUS_INVALID_PAGE;
+    
+    uint16_t new_leaf_id = get_free_page(pager);
+    if (new_leaf_id == 0) return PSQL_STATUS_OUT_OF_MEMORY;
+    
+    DBPage* new_leaf = init_index_leaf_page(pager, new_leaf_id);
+    if (!new_leaf) {
+        mark_page_free(pager, new_leaf_id);
+        return PSQL_STATUS_IO_ERROR;
+    }
+    
+    // Set up sibling pointers
+    new_leaf->header.right_sibling_page_id = leaf_page->header.right_sibling_page_id;
+    leaf_page->header.right_sibling_page_id = new_leaf_id;
+    
+    // Move half of the slots to the new page
+    uint8_t slot_count = leaf_page->header.total_slots;
+    uint8_t mid = slot_count / 2;
+    
+    for (uint8_t i = mid; i < slot_count; i++) {
+        IndexSlotData slot;
+        read_index_slot(pager, leaf_page_id, i, &slot);
+        write_index_slot(pager, new_leaf_id, &slot);
+        free_index_slot(pager, leaf_page_id, i);
+    }
+    
+    leaf_page->header.total_slots = mid;
+    
+    pager_write_page(pager, leaf_page);
+    pager_write_page(pager, new_leaf);
+    
+    *new_page_id = new_leaf_id;
+    return PSQL_STATUS_OK;
+}
+
+// Split an internal node
+PSqlStatus btree_split_internal(Pager* pager, uint16_t internal_page_id, uint16_t* new_page_id) {
+    DBPage* internal_page = pager_get_page(pager, internal_page_id);
+    if (!internal_page || !IS_INTERNAL(internal_page)) return PSQL_STATUS_INVALID_PAGE;
+    
+    uint16_t new_internal_id = get_free_page(pager);
+    if (new_internal_id == 0) return PSQL_STATUS_OUT_OF_MEMORY;
+    
+    DBPage* new_internal = init_index_internal_page(pager, new_internal_id);
+    if (!new_internal) {
+        mark_page_free(pager, new_internal_id);
+        return PSQL_STATUS_IO_ERROR;
+    }
+    
+    // Move half of the slots to the new page
+    uint8_t slot_count = internal_page->header.total_slots;
+    uint8_t mid = slot_count / 2;
+    
+    for (uint8_t i = mid; i < slot_count; i++) {
+        IndexSlotData slot;
+        read_index_slot(pager, internal_page_id, i, &slot);
+        write_index_slot(pager, new_internal_id, &slot);
+        free_index_slot(pager, internal_page_id, i);
+    }
+    
+    internal_page->header.total_slots = mid;
+    
+    pager_write_page(pager, internal_page);
+    pager_write_page(pager, new_internal);
+    
+    *new_page_id = new_internal_id;
+    return PSQL_STATUS_OK;
+}
+
+// Create a B+ tree iterator
+BTreeIterator* btree_iterator_create(Pager* pager, uint16_t root_page_id) {
+    BTreeIterator* iterator = (BTreeIterator*)malloc(sizeof(BTreeIterator));
+    if (!iterator) return NULL;
+    
+    memset(iterator, 0, sizeof(BTreeIterator));
+    iterator->pager = pager;
+    iterator->root_page_id = root_page_id;
+    iterator->current_page_id = root_page_id;
+    
+    return iterator;
+}
+
+// Create a B+ tree iterator with a key range
+BTreeIterator* btree_iterator_range(Pager* pager, uint16_t root_page_id, const uint8_t* start_key, const uint8_t* end_key, size_t key_size) {
+    BTreeIterator* iterator = btree_iterator_create(pager, root_page_id);
+    if (!iterator) return NULL;
+    
+    iterator->has_range = 1;
+    iterator->key_size = key_size;
+    
+    if (start_key) {
+        iterator->start_key = (uint8_t*)malloc(key_size);
+        if (!iterator->start_key) {
+            free(iterator);
+            return NULL;
+        }
+        memcpy(iterator->start_key, start_key, key_size);
+        
+        uint16_t page_id;
+        uint8_t slot_id;
+        PSqlStatus status = btree_search(pager, root_page_id, start_key, key_size, &page_id, &slot_id);
+        if (status == PSQL_STATUS_OK) {
+            iterator->current_page_id = page_id;
+            iterator->current_slot_id = slot_id;
+        }
+    }
+    
+    if (end_key) {
+        iterator->end_key = (uint8_t*)malloc(key_size);
+        if (!iterator->end_key) {
+            free(iterator->start_key);
+            free(iterator);
+            return NULL;
+        }
+        memcpy(iterator->end_key, end_key, key_size);
+    }
+    
+    return iterator;
+}
+
+// Get the next key-value pair from the iterator
+int btree_iterator_next(BTreeIterator* iterator, uint16_t* data_page_id, uint8_t* data_slot_id) {
+    if (!iterator || iterator->current_page_id == 0) return 0;
+    
+    DBPage* page = pager_get_page(iterator->pager, iterator->current_page_id);
+    if (!page) return 0;
+    
+    // Check if we've reached the end of the current page
+    if (iterator->current_slot_id >= page->header.total_slots) {
+        uint16_t next_page_id = page->header.right_sibling_page_id;
+        if (next_page_id == 0) return 0;
+        
+        iterator->current_page_id = next_page_id;
+        iterator->current_slot_id = 0;
+        page = pager_get_page(iterator->pager, next_page_id);
+        if (!page) return 0;
+    }
+    
+    // Get the current slot
+    IndexSlotData slot;
+    read_index_slot(iterator->pager, iterator->current_page_id, iterator->current_slot_id, &slot);
+    
+    // Check if we've reached the end of the range
+    if (iterator->has_range && iterator->end_key && compare_keys(slot.key, iterator->end_key, iterator->key_size) > 0) {
+        return 0;
+    }
+    
+    *data_page_id = slot.next_page_id;
+    *data_slot_id = slot.next_slot_id;
+    
+    iterator->current_slot_id++;
+    return 1;
+}
+
+// Destroy the iterator
+void btree_iterator_destroy(BTreeIterator* iterator) {
+    if (iterator) {
+        free(iterator->start_key);
+        free(iterator->end_key);
+        free(iterator);
+    }
+}
