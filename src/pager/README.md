@@ -5,21 +5,7 @@ Pager handles two different dynamically growing files:
 1) Main `.pseql` database file - contains the data.
 2) Journal `.pseql-journal` file - contains a copy of the original pages of the database whenever TCL instructions like `BEGIN TRANSACTION`, `COMMIT` and `ROLLBACK` is handled. This allows rollback to transaction ID.
 
-File layout in this subsystem is that each folder contains the implementation of one `page` and their necessary page related functions.
-- e.g `base_db` and `base_journal` are implementations for Page 0 of the database and journal.
-
-For database:
-- `base_db`
-- `index`
-- `data`
-- `overflow`
-- `catalog`
-
-For Journal:
-- `base_journal`
-- `journal_index`
-- `journal_data`
-
+File layout in this subsystem is that each folder contains the implementation of one `page` type and their necessary page related functions.
 
 # Database initialization flow
 Database is opened by the virtual machine - it calls functions from the pager subsystem. PreSeQL like SQLite does not have a `CREATE DATABASE` command, but rather its via `psql_open()` which returns a handle to the database.

@@ -149,24 +149,33 @@ void vaccum_all_pages(Pager *pager);  // For loops over page 1 all the way to hi
 void vaccum_data_pages(FreeSpaceTracker* tracker);  // Vaccum only on 4-bucket radix tree with tracker - this is done when the database is online - i.e only data and overflow pages get this treatment
 
 
-/* B+ Tree operations - Technically all Page types are part and parcel of B+ trees, Internal index and interal leaf just deal with routing and data pointing respectively */
+/* B+ Tree operations - Technically all Page types are part and parcel of B+ trees, 
+ * Internal index and interal leaf just deal with routing and data pointing respectively 
+ * B+ Tree operation here usually check the catalog tables - table catalog (for root page), column catalog (for schema), and foreign key catalog (for constraints)
+ * */
 btree_init();  // Create a new B+ Tree index with a primary key. get_free_page() to get a page, init an index internal page to spawn a B+ tree root. Put the entry into the table catalog.
+
 btree_destroy();  // recursively mark all child nodes as freed by walking through the tree, while adding these changes to the free page radix - increment global count for freed pages. For data and overflow pages, decrement reference counts, clear the slots if unused. If data/overflow page has 0 references left, free apge. Else if still have reference, vaccum and redistribute buckets
-btree_search();  // use compare_prefix and size of keys to compare in order 
+
+btree_search();  // Get Row given a key value. use compare_prefix and size of keys to compare in order and traverse B+ Tree
+
 btree_split_leaf(left, right);  // top-down logic - parent initiates the split rather than child
 btree_split_internal(left, right);  // Same
-btree_insert();
-btree_delete(); 
-BTreeIterator* btree_iterator_range(Pager *pager, start_key, end_key);  // Returns multiple Row results that can be stepped through
-Row* btree_iterator_next(BPlusIterator* it);
+
+btree_insert_row();  // Insert row into B+ Tree. Finds the correct tables that are affected by this change via table catalog table and then calls btree_insert() on each B+ root 
+btree_insert();  // Given a page of a root B+ Tree index, insert row
+
+btree_delete_row();  // Deletes row from B+ Tree. Finds the correct tables that are affected via this change via the table catalog table, and btree_delete() on each B+ root.
+btree_delete();   // Delete row from B+ Tree
+
+BTreeIterator* btree_iterator_range(Pager *pager, start_key, end_key);  // Performs a traversal search through B+ Tree index based on key. Returns multiple Row results that can be stepped through. 
+Row* btree_iterator_next(BPlusIterator* it);  // Steps through the Row results
 
 uint64_t encode_int_key(int64_t key);  // For lexicographic comparison. Encodes signed int64_t values and encodes it by adding an offset of 2^63 to remap the range to a positive unsigned value for comparison. Uses XOR trick to x^0x80000
 
 compare_prefix();  // compares keys lexicographically, chases overflow pages if its available
 
 compare();
-
-/* TODO: Database level B+ Tree operations - Insert row, delete_row, get_row*/
 
 
 #endif
