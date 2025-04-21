@@ -12,6 +12,7 @@
 #include "pager_format.h"
 #include "pager/db/free_space.h"
 #include "algorithm/crc.h"
+#include "status/db.h"
 
 void* resize_mmap(int fd, void* old_map, size_t old_size, size_t new_size) {
     // Ensure file is big enough
@@ -261,168 +262,6 @@ DBPage* init_overflow_page(Pager* pager, uint16_t page_no) {
     return allocate_page(pager, page_no, PAGE_OVERFLOW);
 }
 
-
-/* Core pager functions */
-Pager* init_pager(const char* filename, int flags) {
-    Pager* pager = (Pager*)malloc(sizeof(Pager));
-    if (!pager) return NULL;
-    
-    memset(pager, 0, sizeof(Pager));
-    
-    // Store filename
-    pager->filename = strdup(filename);
-    if (!pager->filename) {
-        free(pager);
-        return NULL;
-    }
-    
-    // Create journal filename
-    size_t journal_filename_len = strlen(filename) + strlen(JOURNAL_FILE_EXTENSION) + 1;
-    pager->journal_filename = (char*)malloc(journal_filename_len);
-    if (!pager->journal_filename) {
-        free(pager->filename);
-        free(pager);
-        return NULL;
-    }
-    snprintf(pager->journal_filename, journal_filename_len, "%s%s", filename, JOURNAL_FILE_EXTENSION);
-    
-    // Set read-only flag
-    pager->read_only = (flags & O_RDONLY) != 0;
-    
-    // Open database file
-    int open_flags = flags;
-    if (!pager->read_only) {
-        open_flags |= O_CREAT;
-    }
-    
-    pager->db_pager.fd = open(filename, open_flags, 0644);
-    if (pager->db_pager.fd < 0) {
-        free(pager->journal_filename);
-        free(pager->filename);
-        free(pager);
-        return NULL;
-    }
-    
-    // Get file size
-    struct stat st;
-    if (fstat(pager->db_pager.fd, &st) < 0) {
-        close(pager->db_pager.fd);
-        free(pager->journal_filename);
-        free(pager->filename);
-        free(pager);
-        return NULL;
-    }
-    
-    pager->db_pager.file_size = st.st_size;
-    
-    // Initialize or map existing file
-    if (pager->db_pager.file_size == 0) {
-        // New database - initialize with at least one page
-        if (pager->read_only) {
-            // Can't create a new file in read-only mode
-            close(pager->db_pager.fd);
-            free(pager->journal_filename);
-            free(pager->filename);
-            free(pager);
-            return NULL;
-        }
-        
-        // Extend file to PAGE_SIZE
-        if (ftruncate(pager->db_pager.fd, PAGE_SIZE) < 0) {
-            close(pager->db_pager.fd);
-            free(pager->journal_filename);
-            free(pager->filename);
-            free(pager);
-            return NULL;
-        }
-        
-        pager->db_pager.file_size = PAGE_SIZE;
-    }
-    
-    // Memory map the file
-    int prot = pager->read_only ? PROT_READ : (PROT_READ | PROT_WRITE);
-    pager->db_pager.mem_start = mmap(NULL, pager->db_pager.file_size, prot, MAP_SHARED, pager->db_pager.fd, 0);
-    
-    if (pager->db_pager.mem_start == MAP_FAILED) {
-        close(pager->db_pager.fd);
-        free(pager->journal_filename);
-        free(pager->filename);
-        free(pager);
-        return NULL;
-    }
-    
-    // Database header will be accessed through pager_get_page(pager, 0)
-    
-    // Initialize or verify database will be handled by the caller
-    
-    // Initialize free page map
-    init_free_page_map(pager);
-    
-    // Page caching will be implemented separately
-    
-    // Open journal file if not in read-only mode
-    if (!pager->read_only) {
-        pager->journal_pager.fd = open(pager->journal_filename, O_RDWR | O_CREAT, 0644);
-        if (pager->journal_pager.fd < 0) {
-            munmap(pager->db_pager.mem_start, pager->db_pager.file_size);
-            close(pager->db_pager.fd);
-            free(pager->journal_filename);
-            free(pager->filename);
-            free(pager);
-            return NULL;
-        }
-    }
-    
-    return pager;
-}
-
-PSqlStatus pager_close_db(Pager* pager) {
-    if (!pager) return PSQL_ERROR;
-    
-    // Flush any dirty pages
-    PSqlStatus status = pager_flush_cache(pager);
-    if (status != PSQL_OK) return status;
-    
-    // Sync free page list to header
-    status = sync_free_page_list(pager);
-    if (status != PSQL_OK) return status;
-    
-    // Get the database header from page 0
-    DBPage* header_page = pager_get_page(pager, 0);
-    if (!header_page) return PSQL_ERROR;
-    
-    DatabaseHeader* header = (DatabaseHeader*)header_page->data;
-    
-    // Update header checksum
-    header->checksum = calculate_crc32(header, offsetof(DatabaseHeader, checksum));
-    
-    // Sync to disk
-    if (msync(pager->db_pager.mem_start, pager->db_pager.file_size, MS_SYNC) < 0) {
-        return PSQL_IOERR;
-    }
-    
-    // Unmap memory
-    if (munmap(pager->db_pager.mem_start, pager->db_pager.file_size) < 0) {
-        return PSQL_IOERR;
-    }
-    
-    // Close files
-    close(pager->db_pager.fd);
-    if (pager->journal_pager.fd >= 0) {
-        close(pager->journal_pager.fd);
-    }
-    
-    // Free resources
-    radix_tree_destroy(&pager->db_pager.free_page_map->tree);
-    free(pager->db_pager.free_page_map);
-    free(pager->filename);
-    free(pager->journal_filename);
-    free(pager);
-    
-    return PSQL_OK;
-}
-
-
 /* Page access functions */
 DBPage* pager_get_page(Pager* pager, uint16_t page_no) {
     if (!pager || page_no >= MAX_PAGES) return NULL;
@@ -551,61 +390,254 @@ PSqlStatus pager_verify_db(Pager* pager) {
     return PSQL_OK;
 }
 
-// Vaccum fragmented chunks in Page
-void vacuum_page(DBPage* page) {
-    // Get the page header
-    uint8_t* base = page->data;
-
-    // Temporary buffer to store the compacted chunk data
-    uint8_t compacted[PAGE_SIZE];
-
-    // Start writing data just after the header
-    size_t header_size = sizeof(DBPageHeader);
-    uint16_t new_offset = header_size;
-
-    // New chunk table to build into - use SlotEntry instead
-    SlotEntry new_slots[256]; // Maximum possible slots
-    memset(new_slots, 0, sizeof(new_slots));
-
-    uint16_t total_payload = 0;
-    uint8_t new_slot_count = 0;
-
-    // Get the number of slots from the page header
-    uint8_t slot_count = page->header.total_slots;
-
-    // Iterate through all slots
-    for (int i = 0; i < slot_count; ++i) {
-        // Read the slot entry
-        SlotEntry slot;
-        memcpy(&slot, base + sizeof(DBPageHeader) + i * sizeof(SlotEntry), sizeof(SlotEntry));
-        
-        if (slot.size == 0) continue; // Skip empty slots
-
-        // Copy slot data into new compacted location
-        uint8_t* src = base + slot.offset;
-        memcpy(compacted + new_offset, src, slot.size);
-
-        // Build new slot entry
-        new_slots[new_slot_count].slot_id = i;
-        new_slots[new_slot_count].offset = new_offset;
-        new_slots[new_slot_count].size = slot.size;
-
-        new_offset += slot.size;
-        total_payload += slot.size;
-        new_slot_count++;
+// Helper for free 
+static int is_slot_free(DBPage* page, uint8_t slot_id) {
+    for (uint8_t i = 0; i < page->header.free_slot_count; i++) {
+        if (page->header.free_slot_list[i] == slot_id) {
+            return 1;
+        }
     }
-
-    // Copy compacted data back into original page
-    memcpy(base + header_size, compacted + header_size, total_payload);
-
-    // Write back the updated slot table
-    memcpy(base + sizeof(DBPageHeader), new_slots, new_slot_count * sizeof(SlotEntry));
-
-    // Update header metadata
-    page->header.free_start = header_size + new_slot_count * sizeof(SlotEntry);
-    page->header.free_end = new_offset;
-    page->header.free_total = MAX_USABLE_PAGE_SIZE - (new_offset - header_size) - (new_slot_count * sizeof(SlotEntry));
-    page->header.total_slots = new_slot_count;
+    return 0;
 }
 
+// Vaccum fragmented chunks in Page
+void vacuum_page(DBPage* page) {
+    if (!page || page->header.page_id >= MAX_PAGES || page->header.free_total > MAX_USABLE_PAGE_SIZE) {
+        return;
+    }
+
+    SlotEntry* entries = (SlotEntry*)(page->data + page->header.free_start);
+    uint8_t total_slots = page->header.total_slots;
+    if (total_slots == 0) {
+        return;
+    }
+
+    SlotEntry active_entries[total_slots];
+    uint8_t active_count = 0;
+    uint64_t total_active_size = 0;
+
+    for (uint8_t i = 0; i < total_slots; i++) {
+        if (!is_slot_free(page, entries[i].slot_id)) {
+            active_entries[active_count] = entries[i];
+            total_active_size += entries[i].size;
+            active_count++;
+        }
+    }
+
+    uint64_t new_free_end = MAX_USABLE_PAGE_SIZE;
+    uint64_t new_free_start = sizeof(DBPageHeader) + active_count * sizeof(SlotEntry);
+    uint64_t new_free_total = MAX_USABLE_PAGE_SIZE - new_free_start - total_active_size;
+
+    for (uint8_t i = 0; i < active_count; i++) {
+        uint64_t old_offset = active_entries[i].offset;
+        uint64_t size = active_entries[i].size;
+        new_free_end -= size;
+        memcpy(page->data + new_free_end, page->data + old_offset, size);
+        active_entries[i].offset = new_free_end;
+    }
+
+    memcpy(page->data + sizeof(DBPageHeader), active_entries, active_count * sizeof(SlotEntry));
+
+    page->header.free_start = new_free_start;
+    page->header.free_end = new_free_end;
+    page->header.free_total = new_free_total;
+    page->header.total_slots = active_count;
+    page->header.free_slot_count = 0;
+    page->header.highest_slot = active_count > 0 ? active_entries[active_count - 1].slot_id : 0;
+}
+
+PSqlStatus pager_close_db(Pager* pager) {
+    if (!pager) return PSQL_ERROR;
+    
+    // Flush any dirty pages
+    PSqlStatus status = pager_flush_cache(pager);
+    if (status != PSQL_OK) return status;
+    
+    // Sync free page list to header
+    status = sync_free_page_list(pager);
+    if (status != PSQL_OK) return status;
+    
+    // Get the database header from page 0
+    DBPage* header_page = pager_get_page(pager, 0);
+    if (!header_page) return PSQL_ERROR;
+    
+    DatabaseHeader* header = (DatabaseHeader*)header_page->data;
+    
+    // Update header checksum
+    header->checksum = calculate_crc32(header, offsetof(DatabaseHeader, checksum));
+    
+    // Sync to disk
+    if (msync(pager->db_pager.mem_start, pager->db_pager.file_size, MS_SYNC) < 0) {
+        return PSQL_IOERR;
+    }
+    
+    // Unmap memory
+    if (munmap(pager->db_pager.mem_start, pager->db_pager.file_size) < 0) {
+        return PSQL_IOERR;
+    }
+    
+    // Close files
+    close(pager->db_pager.fd);
+    if (pager->journal_pager.fd >= 0) {
+        close(pager->journal_pager.fd);
+    }
+    
+    // Free resources
+    radix_tree_destroy(&pager->db_pager.free_page_map->tree);
+    free(pager->db_pager.free_page_map);
+    free(pager->filename);
+    free(pager->journal_filename);
+    free(pager);
+    
+    return PSQL_OK;
+}
+
+/* Core pager functions */
+Pager* init_pager(const char* filename, int flags) {
+    Pager* pager = (Pager*)malloc(sizeof(Pager));
+    if (!pager) return NULL;
+
+    memset(pager, 0, sizeof(Pager));
+    pager->flags = flags;
+    pager->read_only = (flags & PAGER_READONLY) != 0;
+    pager->db_pager.fd = -1;
+    pager->journal_pager.fd = -1;
+
+    // Store filename
+    pager->filename = strdup(filename);
+    if (!pager->filename) {
+        free(pager);
+        return NULL;
+    }
+
+    // Create journal filename
+    size_t journal_filename_len = strlen(filename) + strlen(JOURNAL_FILE_EXTENSION) + 1;
+    pager->journal_filename = (char*)malloc(journal_filename_len);
+    if (!pager->journal_filename) {
+        free(pager->filename);
+        free(pager);
+        return NULL;
+    }
+    snprintf(pager->journal_filename, journal_filename_len, "%s%s", filename, JOURNAL_FILE_EXTENSION);
+
+    return pager;
+}
+
+PSqlStatus pager_open_db(Pager* pager) {
+    if (!pager) return PSQL_MISUSE;
+    if (pager->db_pager.fd >= 0) return PSQL_OK; // Already open
+    if (pager->read_only && !access(pager->filename, F_OK)) return PSQL_READONLY; // File doesn’t exist
+
+    // Open database file
+    int open_flags = pager->read_only ? O_RDONLY : (O_RDWR | O_CREAT);
+    if (pager->flags & PAGER_OVERWRITE) open_flags |= O_TRUNC;
+    pager->db_pager.fd = open(pager->filename, open_flags, 0644);
+    if (pager->db_pager.fd < 0) return PSQL_IOERR;
+
+    // Get file size
+    struct stat st;
+    if (fstat(pager->db_pager.fd, &st) < 0) {
+        close(pager->db_pager.fd);
+        pager->db_pager.fd = -1;
+        return PSQL_IOERR;
+    }
+    pager->db_pager.file_size = st.st_size;
+
+    // Initialize or map existing file
+    if (pager->db_pager.file_size == 0 && !pager->read_only) {
+        // Extend file to PAGE_SIZE
+        if (ftruncate(pager->db_pager.fd, PAGE_SIZE) < 0) {
+            close(pager->db_pager.fd);
+            pager->db_pager.fd = -1;
+            return PSQL_IOERR;
+        }
+        pager->db_pager.file_size = PAGE_SIZE;
+    }
+
+    // Memory map the file
+    int prot = pager->read_only ? PROT_READ : (PROT_READ | PROT_WRITE);
+    pager->db_pager.mem_start = mmap(NULL, pager->db_pager.file_size, prot, MAP_SHARED, pager->db_pager.fd, 0);
+    if (pager->db_pager.mem_start == MAP_FAILED) {
+        close(pager->db_pager.fd);
+        pager->db_pager.fd = -1;
+        return PSQL_IOERR;
+    }
+
+    // Initialize free page map
+    init_free_page_map(pager);
+    if (!pager->db_pager.free_page_map) {
+        munmap(pager->db_pager.mem_start, pager->db_pager.file_size);
+        close(pager->db_pager.fd);
+        pager->db_pager.fd = -1;
+        return PSQL_NOMEM;
+    }
+
+    // Verify or initialize database
+    PSqlStatus status;
+    if (pager->db_pager.file_size == PAGE_SIZE && !pager->read_only) {
+        status = pager_init_new_db(pager);
+    } else {
+        status = pager_verify_db(pager);
+    }
+    if (status != PSQL_OK) {
+        munmap(pager->db_pager.mem_start, pager->db_pager.file_size);
+        close(pager->db_pager.fd);
+        pager->db_pager.fd = -1;
+        radix_tree_destroy(&pager->db_pager.free_page_map->tree);
+        free(pager->db_pager.free_page_map);
+        return status;
+    }
+
+    return PSQL_OK;
+}
+
+PSqlStatus pager_open_journal(Pager* pager) {
+    if (!pager) return PSQL_MISUSE;
+    if (pager->read_only) return PSQL_READONLY;
+    if (!(pager->flags & PAGER_JOURNALING_ENABLED)) return PSQL_OK; // Journaling disabled
+    if (pager->journal_pager.fd >= 0) return PSQL_OK; // Already open
+
+    // Open journal file
+    pager->journal_pager.fd = open(pager->journal_filename, O_RDWR | O_CREAT, 0644);
+    if (pager->journal_pager.fd < 0) return PSQL_IOERR;
+
+    // Initialize journal header (placeholder)
+    // TODO: Add journal header initialization if needed
+    return PSQL_OK;
+}
+
+PSqlStatus pager_close_journal(Pager* pager) {
+    if (!pager) return PSQL_MISUSE;
+    if (pager->journal_pager.fd < 0) return PSQL_OK; // No journal open
+
+    // Sync journal to disk
+    if (fsync(pager->journal_pager.fd) < 0) {
+        return PSQL_IOERR;
+    }
+
+    // Close journal file
+    if (close(pager->journal_pager.fd) < 0) {
+        return PSQL_IOERR;
+    }
+    pager->journal_pager.fd = -1;
+
+    return PSQL_OK;
+}
+
+PSqlStatus free_pager(Pager* pager) {
+    if (!pager) return PSQL_NOTFOUND;
+
+    // Close database and journal if open
+    if (pager->db_pager.fd >= 0) {
+        pager_close_db(pager);
+    } else if (pager->journal_pager.fd >= 0) {
+        pager_close_journal(pager);
+    }
+
+    // Free resources
+    free(pager->filename);
+    free(pager->journal_filename);
+    free(pager);
+    return PSQL_OK;
+}
 

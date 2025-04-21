@@ -85,9 +85,11 @@ typedef struct {
 /* Index page structures */
 typedef struct {
     uint8_t key[MAX_DATA_PER_INDEX_SLOT];   // Up to MAX_DATA_PER_INDEX_SLOT bytes of key
+    uint16_t key_size;  // Actual Size of the key - cos key is truncated to fixed_size
     uint16_t next_page_id;  // Pointer to next Index page
     uint8_t next_slot_id;   // Pointer to slot in next Index Page
     OverflowPointer overflow;  // Overflow pointer - null if no overflow
+    uint16_t value_size;  // Size of the key (0 if stored in next_page_id/next_slot_id)
 } IndexSlotData;
 
 #endif /* PRESEQL_PAGER_TYPES_H */

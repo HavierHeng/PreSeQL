@@ -47,4 +47,5 @@ PSqlStatus catalog_get_foreign_key_details(uint16_t fk_id, uint16_t* out_from_ta
                                          uint16_t* out_to_table, uint16_t* out_to_column,
                                          uint8_t* out_on_delete, uint8_t* out_on_update);
 
+PSqlStatus build_secondary_indexes(Pager* pager);  // Builds the secondary indexes for the 3 catalog indexes
 #endif

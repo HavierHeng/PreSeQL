@@ -48,7 +48,7 @@ PSqlStatus pager_open_db(Pager* pager);
 PSqlStatus pager_close_db(Pager* pager);
 PSqlStatus pager_open_journal(Pager* pager);
 PSqlStatus pager_close_journal(Pager* pager);
-void free_pager(Pager* pager);
+PSqlStatus free_pager(Pager* pager);
 
 /* Page access functions */
 DBPage* pager_get_page(Pager* pager, uint16_t page_no);

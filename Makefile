@@ -9,14 +9,16 @@ OBJ_DIR = build/obj
 BIN_DIR = build/bin
 TEST_DIR = test
 
+# $(wildcard $(SRC_DIR)/pager/db/free_space.c) \
 # Source files by category (excluding main files)
 COMPILER_SRCS = $(wildcard $(SRC_DIR)/compiler/*.c)
 ALGORITHM_SRCS = $(wildcard $(SRC_DIR)/algorithm/*.c)
 PAGER_SRCS = $(wildcard $(SRC_DIR)/pager/*.c) \
-             $(wildcard $(SRC_DIR)/pager/db/data/*.c) \
              $(wildcard $(SRC_DIR)/pager/db/index/*.c) \
-             $(wildcard $(SRC_DIR)/pager/db/overflow/*.c) \
-             $(wildcard $(SRC_DIR)/pager/journal/journal_data/*.c)
+             $(wildcard $(SRC_DIR)/pager/db/catalog/*.c) \
+	     $(wildcard $(SRC_DIR)/pager/db/data/*.c) \
+	     $(wildcard $(SRC_DIR)/pager/db/overflow/*.c) 
+
 VM_SRCS = $(wildcard $(SRC_DIR)/vm_engine/*.c)
 ALLOCATOR_SRCS = $(wildcard $(SRC_DIR)/allocator/*.c)
 STATUS_SRCS = $(wildcard $(SRC_DIR)/status/*.c)
@@ -35,6 +37,7 @@ $(shell mkdir -p $(BIN_DIR) \
 	$(OBJ_DIR)/algorithm \
 	$(OBJ_DIR)/pager/db/data \
 	$(OBJ_DIR)/pager/db/index \
+	$(OBJ_DIR)/pager/db/catalog \
 	$(OBJ_DIR)/pager/db/overflow \
 	$(OBJ_DIR)/pager/journal/journal_data \
 	$(OBJ_DIR)/vm_engine \
@@ -53,13 +56,17 @@ preseql: $(OBJS) $(OBJ_DIR)/main.o
 test_radix: $(OBJ_DIR)/algorithm/radix_tree.o $(OBJ_DIR)/tests/test_radix.o
 	$(CC) $(CFLAGS) -o $(BIN_DIR)/$@ $^
 
-# Test pager subsystem
-test_pager: $(OBJ_DIR)/pager/pager.o $(OBJ_DIR)/algorithm/radix_tree.o $(OBJ_DIR)/algorithm/crc.o \
-           $(OBJ_DIR)/pager/db/index/btree.o \
-           $(OBJ_DIR)/pager/db/data/data_page.o $(OBJ_DIR)/pager/db/overflow/overflow_page.o \
-           $(OBJ_DIR)/pager/db/free_space.o $(OBJ_DIR)/tests/test_pager.o
-	$(CC) $(CFLAGS) -o $(BIN_DIR)/$@ $^
 
+# $(OBJ_DIR)/pager/db/free_space.o \  # Not a thing
+# Test pager subsystem
+test_pager: $(OBJ_DIR)/pager/pager.o \
+            $(OBJ_DIR)/algorithm/radix_tree.o \
+            $(OBJ_DIR)/algorithm/crc.o \
+            $(OBJ_DIR)/pager/db/index/index_page.o \
+            $(OBJ_DIR)/pager/db/catalog/catalog.o \
+            $(OBJ_DIR)/pager/db/overflow/overflow_page.o \
+            $(OBJ_DIR)/tests/test_pager.o
+	$(CC) $(CFLAGS) -o $(BIN_DIR)/$@ $^
 
 # Compile main.c
 $(OBJ_DIR)/main.o: $(SRC_DIR)/main.c

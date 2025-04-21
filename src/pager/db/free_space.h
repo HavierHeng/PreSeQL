@@ -24,6 +24,9 @@ uint16_t get_free_page(Pager* pager);
 // Sync free page map with the header's free page list
 // This is called every time threshold, FREE_PAGE_LIST_BATCH_SIZE is met 
 PSqlStatus sync_free_page_list(Pager* pager);
-
+//
+// Vacuum a page to reclaim fragmented space
+// Edge cases: For Data and Overflow pages - these can have variable sized slot entries
+void vacuum_page(DBPage* page);
 #endif
 

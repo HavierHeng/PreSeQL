@@ -12,8 +12,12 @@
 #ifndef PRESEQL_PAGER_DB_INDEX_PAGE_H
 #define PRESEQL_PAGER_DB_INDEX_PAGE_H
 
-#include "pager/types.h"
 #include "status/db.h"
+#include "pager/db/free_space.h"
+#include "pager/db/catalog/catalog.h"
+#include "pager/pager.h"
+#include "pager/types.h"
+#include "pager/db/overflow/overflow_page.h"
 
 /* BTreeIterator structure - FOr stepping through results of range search */
 typedef struct BTreeIterator {
@@ -46,8 +50,9 @@ PSqlStatus btree_split_leaf(Pager* pager, uint16_t leaf_page_id, uint16_t* new_p
 PSqlStatus btree_split_internal(Pager* pager, uint16_t internal_page_id, uint16_t* new_page_id);
 
 PSqlStatus btree_insert(Pager* pager, uint16_t root_page_id, const uint8_t* key, size_t key_size, uint16_t data_page_id, uint8_t data_slot_id);
+PSqlStatus btree_insert_value(Pager* pager, uint16_t root_page_id, const uint8_t* key, size_t key_size, const uint8_t* value, size_t value_size);  // store as value buffer instead
 
-void btree_search(Pager* pager, uint16_t root_page_id, const uint8_t* key, size_t key_size, uint16_t* result_page_id, uint8_t* result_slot_id);
+PSqlStatus btree_search(Pager* pager, uint16_t root_page_id, const uint8_t* key, size_t key_size, uint16_t* result_page_id, uint8_t* result_slot_id);
 
 PSqlStatus btree_delete(Pager* pager, uint16_t root_page_id, const uint8_t* key, size_t key_size);
 
@@ -57,6 +62,7 @@ BTreeIterator* btree_iterator_range(Pager* pager, uint16_t root_page_id, const u
 int btree_iterator_next(BTreeIterator* iterator, uint16_t* data_page_id, uint8_t* data_slot_id);
 void btree_iterator_destroy(BTreeIterator* iterator);
 
+PSqlStatus btree_find_row(Pager* pager, uint16_t page_no, const uint8_t* key, uint16_t key_size, uint8_t* value, uint16_t* value_size);
 #endif 
 
 
