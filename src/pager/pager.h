@@ -33,6 +33,8 @@
 #include "preseql.h"  // Implement PSql Open and Close methods
 #include "constants.h"
 
+#define GET_PAGE_OFFSET(page_id) (PAGE_SIZE * page_id)
+
 /* Database handle structure */
 typedef struct {
     char *filename;
@@ -87,8 +89,19 @@ typedef struct {
     JournalPager journal_pager;
 } Pager;
 
-/* Manage Free Pages via Radix Tree */
+/* Increase the size of the DB file */
+void* resize_mmap(int fd, void* old_map, size_t old_size, size_t new_size);  // Helper function to ftruncate, munmap then remap the newly expanded file. This is needed to be done so not SIGBUS error. Works on all POSIX/UNIX-like rather than Linux's mremap()
+uint16_t allocate_new_db_page(Pager* pager);  // Add one page to the DB, returns the new page number
+uint16_t allocate_new_db_pages(Pager* pager, size_t num_pages);  // Expand the db file by a few pages, useful for initializing DB file - returns the highest new page number allocated
+
+// TODO: Increase the size of the Journal file - same functions as above
+
+/* Manage Free Pages via Radix Tree 
+ * Loads the free list from disk and builds a representation in Pager object memory using Radix Trees
+ * */
 void init_free_page_map(Pager* pager);
+void init_free_data_page_slots(Pager* pager);  // Variable size slots in Data Page
+void init_overflow_data_page_slots(Pager* pager);  // Variable sized chunks/slots in Overflow
 
 // Mark a page number as free
 void mark_page_free(Pager* pager, uint16_t page_no);
@@ -97,20 +110,22 @@ void mark_page_free(Pager* pager, uint16_t page_no);
 void mark_page_used(Pager* pager, uint16_t page_no);
 
 // Get a free page number, or return 0 if none 
-// if no free page then use the highest known page number + 1 (stored in page header)
+// if no free page then use the highest known page number + 1 (stored in page header) - increment the highest allocated page number by 1 as well
 uint16_t get_free_page(Pager* pager);
 
 // Sync free page map with the header's free page list
-// This is called every time
+// This is called every time threshold, FREE_PAGE_LIST_BATCH_SIZE is met 
+// this represents the number of changes to global free_page_map before flushing back to disk free page list using the radix_tree helper function
 PSqlStatus sync_free_page_list(Pager* pager);
 
 /* Page Allocation & Initialization */
-// TODO: I will make these separate init_*_page(Pager* pager, uint16_t page_no)
+// TODO: Since each page has a slightly different flag they need different initializations
 // They also don't have to return a DBPage - I would have just created them if the page was marked as free
 /* Specialized Factory methods for each type of Pages */
-
+DBPage* init_index_internal_page(Pager* pager, uint16_t page_no);
+DBPage* init_index_leaf_page(Pager* pager, uint16_t page_no);
 DBPage* init_data_page(Pager* pager, uint16_t page_no);
-// TODO: Since each page has a slightly different flag 
+DBPage* init_overflow_page(Pager* pager, uint16_t page_no);
 
 /* Core pager functions */
 Pager* pager_open(const char* filename, int flags);  // Opens a pager object - this can be handled over to a PSql object
@@ -122,16 +137,10 @@ DBPage* pager_get_page(Pager* pager, uint16_t page_no);
 PSqlStatus pager_write_page(Pager* pager, DBPage* page);
 
 /* Database initialization */
-PSqlStatus pager_init_new_db(Pager* pager);  // Init a new DB would also clear any existing journal files 
+PSqlStatus pager_init_new_db(Pager* pager);  // Init a new DB would also clear any existing journal files - creates page 0, catalog tables and the secondary tables for the catalog tables
 PSqlStatus pager_verify_db(Pager* pager);  // Checks magic number, size, CRC32 checksum for a valid db file
 
-// TODO: When to vaccum and when to free
-// No need to vaccum index pages - only the data and overflow pages with variable sizes
-void vaccum_page(DBPage);  // Vaccums page if flag COMPRESSABLE set and free_page < FREE_SPACE_VACCUM_SIZE - updates all slots but does not change their slot id
 
-void vaccum_all_pages(Pager *pager);  // For loops over page 1 all the way to highest_page allocated in the db metadata - runs vaccum_page() on each one - this can be done at vm boot
-
-void vaccum_data_pages(FreeSpaceTracker* tracker);  // Vaccum only on 4-bucket radix tree with tracker - this is done when the database is online - i.e only data and overflow pages get this treatment
 
 #endif
 

@@ -10,66 +10,10 @@
 * 8) btree_delete() - to delete entries. This is optional because of the complexity to rebalance the tree after operations, but might be useful. Also when entries are deleted, this also updates some reference counter, updates the free page radix tree and so on. Its a cascade effect.
 */
 
-#include "pager/db/db_format.h"
 #include "types/psql_types.h"
 #include <stdint.h>
 #include <string.h>
 
-#define PAGE_SIZE 4096
-#define PREFIX_SIZE 16
-#define ENTRY_SIZE 24 // 16 prefix + 4 overflow_ptr + 4 pointer
-#define MAX_ENTRIES (PAGE_SIZE / ENTRY_SIZE) // ~170
-#define MIN_ENTRIES (MAX_ENTRIES / 2) // ~85
-
-// Type tags for data page
-#define TYPE_NULL 0x00
-#define TYPE_INT 0x01
-#define TYPE_TEXT 0x02
-
-// Node types
-#define NODE_INTERNAL 0
-#define NODE_LEAF 1
-
-// Pointer types
-typedef uint32_t page_id_t; // Page ID for index/data/overflow pages
-typedef uint32_t slot_id_t; // Slot offset in data page
-
-// B+ tree node entry
-typedef struct {
-    uint8_t prefix[PREFIX_SIZE]; // 16-byte prefix
-    page_id_t overflow_ptr; // Overflow page ID (0 if none)
-    union {
-        page_id_t child_ptr; // Internal node: child page
-        struct {
-            page_id_t page_id; // Leaf node: data page ID
-            slot_id_t slot_id; // Slot offset
-        } value_ptr; // Combined for simplicity
-    };
-} NodeEntry;
-
-// B+ tree node (index page)
-// TODO: This would be the whole DBPage in practice
-typedef struct Node {
-    uint8_t type; // NODE_INTERNAL or NODE_LEAF
-    uint16_t num_entries; // Number of entries
-    page_id_t right_sibling; // Leaf nodes: next leaf (0 if none)
-    NodeEntry entries[MAX_ENTRIES];
-} Node;
-
-// B+ tree structure
-typedef struct {
-    page_id_t root_id; // Root page ID
-    // Assume page storage (in-memory for simplicity)
-    Node* pages[1000]; // Map page_id to Node*
-    uint32_t next_page_id;
-} BPlusTree;
-
-typedef struct {
-    PSqlDataTypes* type; // TYPE_NULL, TYPE_INT, TYPE_TEXT
-    uint8_t** values;  // List of values - since values can be any sized
-    uint64_t* sizes;  // Size in bytes
-    OverflowPointer* overflow_pointers;  // If returned row has overflows
-} Row;
 
 // Iterator for range queries
 typedef struct {

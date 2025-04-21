@@ -34,8 +34,6 @@ Aim for page alignment by padding. */
 #define MAGIC_NUMBER "SQLSHITE"  /* For magic number */
 #define FREE_PAGE_LIST_SIZE 32  /* number of pages that can be cached into the free page list - in practice, since free pages will be reused up first, its rare that this number will be hit */
 #define FREE_PAGE_LIST_BATCH_SIZE 10  /* the number of changes to Radix tree before flushing back to disk free page list */
-// TODO: Radix tree has to be wrapped in another struct that can count the number of changes
-
 
 /* Generic Page flags */
 

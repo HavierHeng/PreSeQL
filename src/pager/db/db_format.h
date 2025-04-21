@@ -10,6 +10,8 @@
 #include <string.h>
 #include <assert.h>
 #include "pager/constants.h"
+#include "pager/pager.h"
+#include "pager/db/base/page.h"  // Page 0
 #include "types/psql_types.h"
 
 /* Shared Flags values */
@@ -96,35 +98,76 @@ typedef struct {
 } OverflowSlotData;
 
 
-void find_slot_in_page();  // Finds the slot of slot_id in the page of page_id
 
-void read_index_slot(uint8_t *slot_ptr, IndexSlotData *slot);  // Parse the slot data for use for comparisons
-void write_index_slot(uint8_t *slot_ptr, IndexSlotData *slot); // Pick slot from free_slot_list else fallback to highest. Copies in slot data and sets up a slot entry in the front. Updates page header.
-void free_index_slot(uint8_t *slot_ptr, IndexSlotData *slot); 
+/* Slot management functions - all types of Pages use slotted pages */
+// Allocating slots
 
-//TODO: Repeat for each slot type
+// Manipulating slots - Index
+// TODO: Should this write to a new struct? And also the slot number
+uint8_t find_empty_index_slot(Pager* pager, uint16_t page_id, uint64_t key_size);  // Since Index pages have an order - its more useful to search for a slot in a specific page for building B+ tree. If the page is not a leaf or internal node, returns 0. Pick slot from free slot list else fallback to highest slot allocated. 
+void read_index_slot(Pager* pager, uint16_t page_id, uint8_t slot_id, IndexSlotData *slot);  // Parse the slot data for use for comparisons
+void write_index_slot(Pager* pager, uint16_t page_id, IndexSlotData *slot); // Pick slot from free_slot_list else fallback to highest. Copies in slot data and sets up a slot entry in the front. Insert slot in order using binary search to find where it should insert at (shift right entries if needed). Updates page header. updates page header as well.
+void free_index_slot(Pager* pager, uint16_t page_id, uint8_t slot_id); 
+
+// Manipulating slots - Data
+typedef struct {
+    PSqlDataTypes type;
+    uint8_t* data;
+    uint64_t size;
+    OverflowPointer* overflow;  // NULL if no overflow
+} Cell;  // Single column value in a returned row
+
+typedef struct {
+    uint32_t num_columns;
+    Cell* cells;
+} Row;  // A whole row of data
+
+uint8_t find_empty_data_slot(Pager* pager, uint64_t value_size);  // Finds a slot in data pages that can fit the value - i.e a row of data via searching the radix buckets
+// Data slots do not need to be ordered in any way, so any candidate with space will do
+void read_data_slot(Pager* pager, uint16_t page_id, uint8_t slot_id, Row *row);
+void write_data_slot(Pager* pager, Row *row);  // Pager doesn't need to slot in any particular data slot - only condition is that the page has enough free space - yes this will lead to inefficiency of page accesses since i mix data but screw it
+void free_data_slot(Pager* pager, uint16_t page_id, uint8_t slot_id);
+
+
+// Manipulating chunks - Overflow
+// TODO: I think i need an overflow data type maybe e.g Chunk
+
+uint8_t find_empty_overflow_slot(Pager* pager, uint64_t value_size);  // Finds a slot in overflow pages that can fit the value - i.e a chunk via searching the radix buckets
+// Overflow chunks do not need to be order in any ways, any candidate with enough free space will do
+void read_overflow_slot(Pager* pager, uint16_t page_id, uint8_t slot_id, Chunk* chunk);
+void write_overflow_slot(Pager* pager, Chunk *chunk);  // Pager doesn't need to slot in any particular data slot - only condition is that the page has enough free space - yes this will lead to inefficiency of page accesses since i mix data but screw it
+void free_overflow_slot(Pager* pager, uint16_t page_id, uint8_t slot_id);
 
 
 
-// TODO: B+ tree operations: See index/page.c
-void encode_index_key();  // B+ Tree - applies the encoding trick to signed int by adding 2^63, NULL should be compared first
-void compare_index_key();  // B+ Tree - compares keys lexicographically
+/* Slot cleaning - Vaccum - Applied to all pages as their slot entries can fragment as it is freed */
+// TODO: Mark page free if reference counter drops to zero for a page - this is incremented/decremented by functions
+void vaccum_page(DBPage);  // Vaccums page if flag COMPRESSABLE set and free_page < FREE_SPACE_VACCUM_SIZE - updates all slots but does not change their slot id
 
-// TODO: Compose insert_row and delete_row, get_row using B+ tree and the index, overflow and data page operations
+void vaccum_all_pages(Pager *pager);  // For loops over page 1 all the way to highest_page allocated in the db metadata - runs vaccum_page() on each one - this can be done at vm boot
 
-/* Usage in practice
-// Usage - creating a data page like this basically
-// Creates a new B+ Tree node (page)
-// Insert stuff - in memory this is a slotted row
-// In practice, if you have journalling - this is where you should make use of it to write to a journal
-//
-Page* p = init_data_page(100);
-uint8_t row1[] = { 1, 2, 3, 4 };
-insert_row(p, row1, sizeof(row1));
+void vaccum_data_pages(FreeSpaceTracker* tracker);  // Vaccum only on 4-bucket radix tree with tracker - this is done when the database is online - i.e only data and overflow pages get this treatment
 
-uint16_t row_size;
-uint8_t* r = get_row(p, 0, &row_size);
-delete_row(p, 0);
-*/
+
+/* B+ Tree operations - Technically all Page types are part and parcel of B+ trees, Internal index and interal leaf just deal with routing and data pointing respectively */
+btree_init();  // Create a new B+ Tree index with a primary key. get_free_page() to get a page, init an index internal page to spawn a B+ tree root. Put the entry into the table catalog.
+btree_destroy();  // recursively mark all child nodes as freed by walking through the tree, while adding these changes to the free page radix - increment global count for freed pages. For data and overflow pages, decrement reference counts, clear the slots if unused. If data/overflow page has 0 references left, free apge. Else if still have reference, vaccum and redistribute buckets
+btree_search();  // use compare_prefix and size of keys to compare in order 
+btree_split_leaf(left, right);  // top-down logic - parent initiates the split rather than child
+btree_split_internal(left, right);  // Same
+btree_insert();
+btree_delete(); 
+BTreeIterator* btree_iterator_range(Pager *pager, start_key, end_key);  // Returns multiple Row results that can be stepped through
+Row* btree_iterator_next(BPlusIterator* it);
+
+uint64_t encode_int_key(int64_t key);  // For lexicographic comparison. Encodes signed int64_t values and encodes it by adding an offset of 2^63 to remap the range to a positive unsigned value for comparison. Uses XOR trick to x^0x80000
+
+compare_prefix();  // compares keys lexicographically, chases overflow pages if its available
+
+compare();
+
+/* TODO: Database level B+ Tree operations - Insert row, delete_row, get_row*/
+
+
 #endif
 
