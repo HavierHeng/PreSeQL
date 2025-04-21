@@ -10,6 +10,7 @@
 #include "pager.h"
 #include "pager/constants.h"
 #include "pager_format.h"
+#include "pager/db/free_space.h"
 #include "algorithm/crc.h"
 
 void* resize_mmap(int fd, void* old_map, size_t old_size, size_t new_size) {

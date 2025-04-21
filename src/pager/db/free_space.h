@@ -4,7 +4,6 @@
 #include "pager/types.h"
 #include "status/db.h"
 
-
 /* Manage Free Pages via Radix Tree 
  * Loads the free list from disk and builds a representation in Pager object memory using Radix Trees
  */
@@ -26,5 +25,5 @@ uint16_t get_free_page(Pager* pager);
 // This is called every time threshold, FREE_PAGE_LIST_BATCH_SIZE is met 
 PSqlStatus sync_free_page_list(Pager* pager);
 
-#endif /* PRESEQL_PAGER_DB_FREE_SPACE_H */
+#endif
 
