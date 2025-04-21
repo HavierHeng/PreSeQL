@@ -8,6 +8,82 @@
 #include <sys/stat.h>
 #include <errno.h>
 
+
+void* resize_mmap(int fd, void* old_map, size_t old_size, size_t new_size) {
+    // Ensure file is big enough
+    if (ftruncate(fd, new_size) != 0) {
+        perror("ftruncate");
+        return NULL;
+    }
+
+    // Unmap old region
+    if (munmap(old_map, old_size) != 0) {
+        perror("munmap");
+        return NULL;
+    }
+
+    // Map new region
+    void* new_map = mmap(NULL, new_size, PROT_READ | PROT_WRITE, MAP_SHARED, fd, 0);
+    if (new_map == MAP_FAILED) {
+        perror("mmap");
+        return NULL;
+    }
+
+    return new_map;
+}
+
+// Grows the file by one page and returns a pointer to the new page - do the same for journal. Returns the page id of the page allocated
+uint16_t allocate_new_db_page(Pager* pager) {
+    DatabasePager* db = &pager->db_pager;
+
+    // Determine current mapped size
+    off_t current_size = lseek(db->fd, 0, SEEK_END);
+    if (current_size < 0) {
+        perror("lseek");
+        return NULL;
+    }
+
+    // Calculate new size
+    size_t new_size = current_size + PAGE_SIZE;
+
+    // Resize and remap
+    void* new_map = resize_mmap(db->fd, db->mem_start, current_size, new_size);
+    if (!new_map) return NULL;
+
+    db->mem_start = new_map;
+
+    // Return pointer to newly allocated page
+    // TODO: Modify to return page id
+    return (uint8_t*)db->mem_start + current_size;
+}
+
+// Probs more useful if you initializing DB file - you will always attempt to create multiple pages at one go. Returns the highest page id allocated.
+uint16_t allocate_new_db_pages(Pager* pager, size_t num_pages) {
+    if (num_pages == 0) return NULL;
+
+    DatabasePager* db = &pager->db_pager;
+
+    // Determine current file size
+    off_t old_size = lseek(db->fd, 0, SEEK_END);
+    if (old_size < 0) {
+        perror("lseek");
+        return NULL;
+    }
+
+    size_t growth = num_pages * PAGE_SIZE;
+    size_t new_size = old_size + growth;
+
+    // Resize and remap
+    void* new_map = resize_mmap(db->fd, db->mem_start, old_size, new_size);
+    if (!new_map) return NULL;
+
+    db->mem_start = new_map;
+
+    // TODO: Modify to return the highest page id allocated
+    return (uint8_t*)db->mem_start + old_size;
+}
+
+
 void init_free_page_map(Pager* pager) {
     pager->free_page_map = radix_tree_create();
     
@@ -113,35 +189,7 @@ Page* allocate_page(Pager* pager, uint16_t page_no, PageType type) {
     page->header.free = 0;
     page->header.type = type;
 
-    switch (type) {
-        case DATA:
-            page->header.type_specific.data.num_slots = 0;
-            page->header.type_specific.data.slot_directory_offset = MAX_DATA_BYTES;
-            page->header.type_specific.data.reference_count = 0;
-            page->header.type_specific.data.can_compact = 0;
-            break;
-
-        case INDEX:
-            page->header.type_specific.btree.btree_type = BTREE_LEAF; // default
-            page->header.type_specific.btree.free_start = sizeof(PageHeader);
-            page->header.type_specific.btree.free_end = MAX_DATA_BYTES;
-            page->header.type_specific.btree.total_free = MAX_DATA_BYTES - sizeof(PageHeader);
-            page->header.type_specific.btree.flags = 0;
-            break;
-
-        case OVERFLOW:
-            page->header.type_specific.overflow.next_overflow_page = 0;
-            page->header.type_specific.overflow.payload_size = 0;
-            page->header.type_specific.overflow.num_chunks = 0;
-            page->header.type_specific.overflow.free_offset = sizeof(PageHeader) + 
-                                                             sizeof(OverflowChunkMeta) * MAX_OVERFLOW_CHUNKS;
-            page->header.type_specific.overflow.free_bytes = MAX_DATA_BYTES - 
-                                                            (sizeof(PageHeader) + 
-                                                             sizeof(OverflowChunkMeta) * MAX_OVERFLOW_CHUNKS);
-            page->header.type_specific.overflow.reference_count = 0;
-            break;
-    }
-
+    // TODO: Modify to use the flags in the page instead
     mark_page_used(pager, page_no);
     return page;
 }
