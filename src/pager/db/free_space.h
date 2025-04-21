@@ -7,9 +7,15 @@
 /* Manage Free Pages via Radix Tree 
  * Loads the free list from disk and builds a representation in Pager object memory using Radix Trees
  */
+void init_radix_trees(Pager* pager);  // Calls the below three to initialize
 void init_free_page_map(Pager* pager);
 void init_free_data_page_slots(Pager* pager);  // Variable size slots in Data Page
-void init_overflow_data_page_slots(Pager* pager);  // Variable sized chunks/slots in Overflow
+void init_free_overflow_data_page_slots(Pager* pager);  // Variable sized chunks/slots in Overflow
+
+void destroy_radix_trees(Pager* pager);  // Calls the below three to clean up
+void destroy_free_page_map(Pager* pager);
+void destroy_free_data_page_slots(Pager* pager);  // Variable size slots in Data Page
+void destroy_free_overflow_data_page_slots(Pager* pager);  // Variable sized chunks/slots in Overflow
 
 // Mark a page number as free
 void mark_page_free(Pager* pager, uint16_t page_no);

@@ -35,10 +35,6 @@ void test_pager_init() {
     PSqlStatus status = pager_open_db(pager);
     assert(status == PSQL_OK);
 
-    // Initialize a new database
-    status = pager_init_new_db(pager);
-    assert(status == PSQL_OK);
-
     // Verify the database
     status = pager_verify_db(pager);
     assert(status == PSQL_OK);
@@ -54,51 +50,40 @@ void test_pager_init() {
 void test_page_allocation() {
     printf("Testing page allocation...\n");
 
-    // Initialize pager
-    Pager* pager = init_pager(TEST_DB_FILE, PAGER_WRITEABLE);
+    // Clean up any existing test files
+    cleanup_test_files();
+
+    Pager* pager = init_pager(TEST_DB_FILE, PAGER_WRITEABLE | PAGER_OVERWRITE);
     assert(pager != NULL);
 
-    // Open the database
     PSqlStatus status = pager_open_db(pager);
     assert(status == PSQL_OK);
 
-    // Allocate a new page
-    uint16_t page_id = allocate_new_db_page(pager);
-    assert(page_id > 0);
+    // Allocate 4 pages at once
+    uint16_t start_page_id = allocate_new_db_pages(pager, 4);
+    assert(start_page_id == 7); // Expect pages 4-7, since 0-3 are initialized
+    uint16_t page_id = start_page_id - 3;
+    uint16_t leaf_page_id = page_id + 1;
+    uint16_t internal_page_id = page_id + 2;
+    uint16_t overflow_page_id = page_id + 3;
 
-    // Initialize different page types
+    // Initialize pages
     DBPage* data_page = init_data_page(pager, page_id);
     assert(data_page != NULL);
     assert(data_page->header.flag == PAGE_DATA);
 
-    // Allocate another page
-    uint16_t leaf_page_id = allocate_new_db_page(pager);
-    assert(leaf_page_id > 0);
-
-    // Initialize as index leaf page
     DBPage* leaf_page = init_index_leaf_page(pager, leaf_page_id);
     assert(leaf_page != NULL);
     assert(leaf_page->header.flag == PAGE_INDEX_LEAF);
 
-    // Allocate another page
-    uint16_t internal_page_id = allocate_new_db_page(pager);
-    assert(internal_page_id > 0);
-
-    // Initialize as index internal page
     DBPage* internal_page = init_index_internal_page(pager, internal_page_id);
     assert(internal_page != NULL);
     assert(internal_page->header.flag == PAGE_INDEX_INTERNAL);
 
-    // Allocate another page
-    uint16_t overflow_page_id = allocate_new_db_page(pager);
-    assert(overflow_page_id > 0);
-
-    // Initialize as overflow page
     DBPage* overflow_page = init_overflow_page(pager, overflow_page_id);
     assert(overflow_page != NULL);
     assert(overflow_page->header.flag == PAGE_OVERFLOW);
 
-    // Close the database
     status = pager_close_db(pager);
     assert(status == PSQL_OK);
 
@@ -271,6 +256,7 @@ void test_vacuum() {
 }
 
 int main() {
+    setvbuf(stderr, NULL, _IONBF, 0);  // Force unbuffered stderr - so i can debug things
     printf("Starting pager subsystem tests...\n");
 
     test_pager_init();

@@ -1,7 +1,7 @@
 
 # Compiler settings
 CC = gcc
-CFLAGS = -Wall -Wextra -std=c99 -g -I./src
+CFLAGS = -Wall -Wextra -std=c99 -g -I./src -fsanitize=address
 
 # Directories
 SRC_DIR = src

@@ -31,7 +31,7 @@ typedef struct {
 
 typedef struct {
     uint8_t num_frees;
-    RadixTree tree;
+    RadixTree* tree;  // Store the pointer to keep it alive over scopes
 } PageTracker;
 
 /* Pager structures */
@@ -41,7 +41,7 @@ typedef struct {
     size_t file_size;  // Size of the memory-mapped region
     PageTracker* free_page_map;   // Tracks free pages in a Radix Tree
     FreeSpaceTracker* free_data_page_slots;  // Variable size slots in Data Page
-    FreeSpaceTracker* overflow_data_page_slots;  // Variable sized chunks/slots in Overflow
+    FreeSpaceTracker* free_overflow_data_page_slots;  // Variable sized chunks/slots in Overflow
     // Index Pages doesn't need radix trees - searching free_slot_list[] enough
 } DatabasePager;
 
