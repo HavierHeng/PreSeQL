@@ -65,6 +65,15 @@ typedef enum {
 } FreeSpaceBucket;
 
 /* Separating concerns for the two Pagers */
+#define PAGER_READONLY           0x01  // 0000 0001 - Open DB in read-only mode, prevents write attempts
+#define PAGER_WRITEABLE          0x02  // 0000 0010 - Opens DB as writeable (default). Mutually exclusive with READONLY
+#define PAGER_OVERWRITE          0x04  // 0000 0100 - Allow overwrite mode (usually false) if file already exists
+#define PAGER_JOURNALING_ENABLED 0x08  // 0000 1000 - Create a journal file, enabling TCL instructions like BEGIN TRANSACTION, COMMIT and ROLLBACK
+#define PAGER_DIRTY              0x10  // 0001 0000 - Pages in memory have been modified and need syncing (Placeholder for now)
+#define PAGER_SYNC_ON_WRITE      0x20  // 0010 0000 - Call msync or fsync after every page write (Placeholder for now)
+#define PAGER_MEMORY_DB          0x40  // 0100 0000 - Memory-only database (WIP - placeholder)
+#define PAGER_CRASH_RECOVERY     0x80  // 1000 0000 - Pager in recovery mode after a crash (WIP - placeholder)
+
 typedef struct {
     int fd;            // File descriptor for the database file
     void* mem_start;   // Start of memory-mapped region for database file
@@ -72,14 +81,12 @@ typedef struct {
     FreeSpaceTracker* free_data_page_slots;  // Variable size slots in Data Page
     FreeSpaceTracker* overflow_data_page_slots;  // Variable sized chunks/slots in Overflow
     // Index Pages doesn't need radix trees - searching free_slot_list[] enough
-    uint8_t flags;              // Read-only mode flag
 } DatabasePager;
 
 typedef struct {
     int fd;             // File descriptor for the journal file
     void* mem_start;    // Start of memory-mapped region for journal file
     PageTracker* free_page_map;   // Tracks free pages and global number of frees in a Radix Tree in memory - made by reading free_pages_list[] in main Journal header
-    uint8_t flags;              // Enabled?
 } JournalPager;
 
 /* Pager */
@@ -87,6 +94,7 @@ typedef struct {
     char* filename;             // Database/Journal filename without the extension (.pseql or .pseql-journal)
     DatabasePager db_pager;
     JournalPager journal_pager;
+    uint8_t flags;              // See above for flags
 } Pager;
 
 /* Increase the size of the DB file */
@@ -128,9 +136,12 @@ DBPage* init_data_page(Pager* pager, uint16_t page_no);
 DBPage* init_overflow_page(Pager* pager, uint16_t page_no);
 
 /* Core pager functions */
-Pager* pager_open(const char* filename, int flags);  // Opens a pager object - this can be handled over to a PSql object
-PSqlStatus pager_close(Pager* pager);
-PSqlStatus pager_sync(Pager* pager);
+Pager* init_pager(const char* filename, int flags);  // Create a new pager object to track open files
+PSqlStatus pager_open_db(Pager* pager);  // Opens db file
+PSqlStatus pager_close_db(Pager* pager);  // Closes and cleans up db files - as well as syncs any changes to disk
+PSqlStatus pager_open_journal(Pager* pager);  // Opens journal file 
+PSqlStatus pager_close_journal(Pager* pager);  // Closes and cleans up journal files - as well as syncs any changes to disk
+void free_pager(Pager* pager);  // Clean up pager object
 
 /* Page access functions */
 DBPage* pager_get_page(Pager* pager, uint16_t page_no);
@@ -139,8 +150,6 @@ PSqlStatus pager_write_page(Pager* pager, DBPage* page);
 /* Database initialization */
 PSqlStatus pager_init_new_db(Pager* pager);  // Init a new DB would also clear any existing journal files - creates page 0, catalog tables and the secondary tables for the catalog tables
 PSqlStatus pager_verify_db(Pager* pager);  // Checks magic number, size, CRC32 checksum for a valid db file
-
-
 
 #endif
 
