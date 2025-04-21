@@ -14,9 +14,9 @@
 
 #include <stdint.h>
 #include <string.h>
-#include "pager/db/base/page_format.h"
-#include "status/db.h"
+#include "pager/types.h"
 #include "pager/constants.h"
+#include "status/db.h"
 
 // Catalog initialization functions - These are called when new DB file is created
 // The primary keys are always going to be the first ID for each catalog table

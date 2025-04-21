@@ -24,7 +24,6 @@ uint8_t find_empty_overflow_slot(Pager* pager, uint64_t value_size);  // Finds a
 void read_overflow_slot(Pager* pager, uint16_t page_id, uint8_t slot_id, Chunk* chunk);
 void write_overflow_slot(Pager* pager, Chunk *chunk);  // Pager doesn't need to slot in any particular data slot - only condition is that the page has enough free space - yes this will lead to inefficiency of page accesses since i mix data but screw it
 void free_overflow_slot(Pager* pager, uint16_t page_id, uint8_t slot_id);
-// vaccum_overflow_chunk() - no need making vaccum_page() would be more efficient given they share the same header
 
 #endif
 
