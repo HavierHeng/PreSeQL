@@ -8,27 +8,6 @@
 #define CHUNK_OVERHEAD (sizeof(uint16_t) + sizeof(uint16_t)) // OverflowPointer: next_page_id + next_chunk_id
 #define MAX_CHUNK_DATA_SIZE (MAX_USABLE_PAGE_SIZE - CHUNK_OVERHEAD)
 
-// Initialize an overflow page
-DBPage* init_overflow_page(Pager* pager, uint16_t page_no) {
-    DBPage* page = pager_get_page(pager, page_no);
-    if (!page) return NULL;
-
-    memset(&page->header, 0, sizeof(DBPageHeader));
-    page->header.page_id = page_no;
-    page->header.flag = PAGE_OVERFLOW;
-    page->header.free_start = sizeof(DBPageHeader);
-    page->header.free_end = MAX_USABLE_PAGE_SIZE;
-    page->header.free_total = MAX_USABLE_PAGE_SIZE - sizeof(DBPageHeader);
-    page->header.free_slot_count = 0;
-    page->header.highest_slot = 0;
-    page->header.total_slots = 0;
-    page->header.right_sibling_page_id = 0;
-    page->header.ref_counter = 0;
-
-    pager_write_page(pager, page);
-    return page;
-}
-
 // Find an empty slot in an overflow page that can fit the data
 uint8_t find_empty_overflow_slot(Pager* pager, uint16_t page_id, size_t data_size) {
     DBPage* page = pager_get_page(pager, page_id);

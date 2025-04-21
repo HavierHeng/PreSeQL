@@ -59,5 +59,11 @@ PSqlStatus pager_flush_cache(Pager* pager);
 PSqlStatus pager_init_new_db(Pager* pager);
 PSqlStatus pager_verify_db(Pager* pager);
 
+/* Factory for page types */
+DBPage* init_data_page(Pager* pager, uint16_t page_no);
+DBPage* init_index_leaf_page(Pager* pager, uint16_t page_no);
+DBPage* init_index_internal_page(Pager* pager, uint16_t page_no);
+DBPage* init_overflow_page(Pager* pager, uint16_t page_no);
+
 #endif /* PRESEQL_PAGER_H */
 

@@ -23,40 +23,6 @@ int compare_keys(const uint8_t* key1, const uint8_t* key2, size_t key_size) {
     return memcmp(key1, key2, key_size);
 }
 
-// Initialize an internal index page
-DBPage* init_index_internal_page(Pager* pager, uint16_t page_no) {
-    DBPage* page = pager_get_page(pager, page_no);
-    if (!page) return NULL;
-    
-    memset(&page->header, 0, sizeof(DBPageHeader));
-    page->header.page_id = page_no;
-    page->header.flag = PAGE_INDEX_INTERNAL;
-    page->header.free_start = sizeof(DBPageHeader);
-    page->header.free_end = MAX_USABLE_PAGE_SIZE;
-    page->header.free_total = MAX_USABLE_PAGE_SIZE - sizeof(DBPageHeader);
-    page->header.right_sibling_page_id = 0;
-    
-    pager_write_page(pager, page);
-    return page;
-}
-
-// Initialize a leaf index page
-DBPage* init_index_leaf_page(Pager* pager, uint16_t page_no) {
-    DBPage* page = pager_get_page(pager, page_no);
-    if (!page) return NULL;
-    
-    memset(&page->header, 0, sizeof(DBPageHeader));
-    page->header.page_id = page_no;
-    page->header.flag = PAGE_INDEX_LEAF;
-    page->header.free_start = sizeof(DBPageHeader);
-    page->header.free_end = MAX_USABLE_PAGE_SIZE;
-    page->header.free_total = MAX_USABLE_PAGE_SIZE - sizeof(DBPageHeader);
-    page->header.right_sibling_page_id = 0;
-    
-    pager_write_page(pager, page);
-    return page;
-}
-
 // Find an empty slot in an index page
 uint8_t find_empty_index_slot(Pager* pager, uint16_t page_id, uint64_t key_size) {
     DBPage* page = pager_get_page(pager, page_id);
