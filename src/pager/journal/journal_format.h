@@ -13,7 +13,6 @@
 #define PRESEQL_PAGER_JOURNAL_FORMAT_H
 
 #include <stdint.h>
-#include "pager/constants.h"
 #include "base/page.h"
 #include "data/page.h"
 #include "index/page.h"

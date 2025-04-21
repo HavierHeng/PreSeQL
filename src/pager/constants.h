@@ -7,8 +7,8 @@
 /* Page Sizes - Check OS setting */
 #define PAGE_SIZE 4096  /* Usually either 4KB or 8KB, but more commonly 4KB */
 #define MAX_PAGES 65535  /* 2^16 so all page counts are represented by uint_16 */
-#define ARCH_BITS 64  /* Safe to assume this is the case for all new hardware and OSes - this also means this might not build on some old RPis and Microcontrollers lol git guud */
-#define POINTER_SIZE (BIT_ARCH/8)  /* On 64-bit hardware and OS (yes use the right version), this value will always be 8 bytes */
+#define ARCH_BITS 64  /* Assumes 64-bits is the case for all new hardware and OSes - this also means this might not build on some old RPis and Microcontrollers lol git guud */
+#define POINTER_SIZE (BIT_ARCH/8)  /* Assume 64-bit hardware and OS (use the right platform), this value will always be 8 bytes */
 
 
 /* File names */
@@ -82,14 +82,6 @@ Aim for page alignment by padding. */
 /* Catalog Pages */
 #define MAX_TABLE_NAME_LENGTH 255  /* For Table catalog, Including null terminator */
 #define MAX_COLUMN_NAME_LENGTH 255  /* For Column catalog, Including null terminator */
-
-
-/* Radix Tree free buckets - to determine page has slots to put things in 
- * BUCKET_FULL,  // 0-25% free out of MAX_USABLE_PAGE_SIZE
- * BUCKET_MOSTLY_FULL,  // 25-50% free out of MAX_USABLE_PAGE_SIZE
- * BUCKET_MOSTLY_EMPTY,  // 50-75% free out of MAX_USABLE_PAGE_SIZE
- * */
-#define NUM_BUCKETS 3
 
 
 #endif 

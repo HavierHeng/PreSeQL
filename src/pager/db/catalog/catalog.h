@@ -14,14 +14,15 @@
 
 #include <stdint.h>
 #include <string.h>
-#include "../db_format.h"
-#include "../../status/db.h"
+#include "pager/db/base/page_format.h"
+#include "status/db.h"
+#include "pager/constants.h"
 
 // Catalog initialization functions - These are called when new DB file is created
 // The primary keys are always going to be the first ID for each catalog table
-PSqlStatus init_table_catalog(Page* page);
-PSqlStatus init_column_catalog(Page* page);
-PSqlStatus init_fk_catalog(Page* page);
+PSqlStatus init_table_catalog(DBPage* page);
+PSqlStatus init_column_catalog(DBPage* page);
+PSqlStatus init_fk_catalog(DBPage* page);
 
 // Table catalog operations
 PSqlStatus catalog_add_table(const char* table_name, uint16_t root_page, uint8_t index_type, uint8_t flags, uint16_t* out_table_id);
