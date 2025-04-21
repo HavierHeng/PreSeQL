@@ -5,6 +5,9 @@
 #include "status/db.h"
 #include "status/step.h"
 #include "types/psql_types.h"
+#include "compiler/parser.h"
+#include "compiler/tokenizer.h"
+#include "compiler/generator.h"
 #include "pager/pager.h"
 #include "vm_engine/vm.h"
 #include "vm_engine/opcodes.h"
@@ -17,7 +20,7 @@ PSqlStatus psql_close(PSql* db);
 /* Frontend to PreSeQL: Lexer, Parser, Code Generator steps 
  * Returns either PSQL_OK or PSQL_ERROR (if invalid)
  * */
-PSqlStatus psql_prepare(PSql* db, char* sql_query, int query_size, PSqlStatement* stmt);
+PSqlStatus psql_prepare(PSql* db, char* sql_query, PSqlStatement* stmt);
 
 /* Clean up VM state, but do not clear instructions inside it - i.e rewind 
  * Very useful for re-evaluating the same statement without needing to psql_prepare() again.
