@@ -8,6 +8,7 @@
 #include <stddef.h>
 #include "pager/constants.h"
 #include "journal_format.h"
+#include "pager/pager_format.h"
 #include "algorithm/crc.h"
 
 // Static variables for journal state
