@@ -67,6 +67,9 @@ typedef struct {
     int fd;            // File descriptor for the database file
     void* mem_start;   // Start of memory-mapped region for database file
     PageTracker* free_page_map;   // Tracks free pages and global number of frees in a Radix Tree in memory - made by reading free_pages_list[] in main DB header
+    FreeSpaceTracker* free_data_page_slots;  // Variable size slots in Data Page
+    FreeSpaceTracker* overflow_data_page_slots;  // Variable sized chunks/slots in Overflow
+    // Index Pages doesn't need radix trees - searching free_slot_list[] enough
     uint8_t flags;              // Read-only mode flag
 } DatabasePager;
 
@@ -98,14 +101,16 @@ void mark_page_used(Pager* pager, uint16_t page_no);
 uint16_t get_free_page(Pager* pager);
 
 // Sync free page map with the header's free page list
+// This is called every time
 PSqlStatus sync_free_page_list(Pager* pager);
 
 /* Page Allocation & Initialization */
-DBPage* allocate_page(Pager* pager, uint16_t page_no);
-
+// TODO: I will make these separate init_*_page(Pager* pager, uint16_t page_no)
+// They also don't have to return a DBPage - I would have just created them if the page was marked as free
 /* Specialized Factory methods for each type of Pages */
+
 DBPage* init_data_page(Pager* pager, uint16_t page_no);
-// TODO: Since each page 
+// TODO: Since each page has a slightly different flag 
 
 /* Core pager functions */
 Pager* pager_open(const char* filename, int flags);  // Opens a pager object - this can be handled over to a PSql object

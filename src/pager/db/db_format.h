@@ -42,8 +42,10 @@ typedef struct {
     uint8_t free_slot_count;  // For queue operations
     uint8_t free_slot_list[FREE_SLOT_LIST_SIZE];  // Track and reuse free slots as much as possible
 
-    // Pad to MAX_PAGE_HEADER_SIZE = 32 in bytes
-    uint8_t reserved[2];
+    // B+ Tree specific 
+    uint16_t right_sibling_page_id;  // Page ID of right sibling page for PAGE_INDEX_LEAF - set to NULL or ignore for PAGE_INDEX_INTERNAL, PAGE_DATA and PAGE_OVERFLOW
+
+    // No need to pad to MAX_PAGE_HEADER_SIZE = 32 in bytes
 } DBPageHeader;
 
 // Page Memory, aligned to PAGE_SIZE (4096 Bytes usually) 
@@ -54,7 +56,6 @@ typedef struct {
     uint8_t data[MAX_USABLE_PAGE_SIZE];  // 4032 bytes - The data depends on the page type - its filled with SlotEntry and Index/Data/OverflowSlotData types
     uint8_t reserved[MAX_JOURNAL_HEADER_SIZE];  // 32 bytes - reserved for Journal later
 } DBPage;
-
 
 
 /* Stored in slot directory table after Header */

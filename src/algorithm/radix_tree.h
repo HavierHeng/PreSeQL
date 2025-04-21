@@ -7,11 +7,18 @@
 // This is as pages in the database can get huge in number, and is dynamic in count. 
 // This job to monitor freed pages cannot be handled by just a bitmap alone, while a free list is inefficient.
 
+// There are more complex implementations of a radix tree
+// e.g storing values different from a sorting key 
+// but in my case, the mere presence of an item in the RadixTree mean that it fulfils some condition 
+// e.g is a freed page, and once it is reused its removed
+// e.g if it has a size of mostly_full, it is added to the radix tree bucket 
+
 #include <stdlib.h>
 #include <stdint.h>
 #include <stdbool.h>
 #include <unistd.h>
 #include <string.h>
+
 #include "allocator/arena.h"
 
 #define RADIX_BITS 4
@@ -19,7 +26,6 @@
 
 typedef struct RadixNode {
     struct RadixNode *children[RADIX_SIZE];  // next level
-    uint8_t is_free; // valid at leaves only (1 = free, 0 = not free)
 } RadixNode;
 
 typedef struct RadixTree {
@@ -33,11 +39,11 @@ void radix_tree_destroy(RadixTree* tree);
 // Basic Radix Tree operations
 void radix_tree_insert(RadixTree *tree, uint16_t page_no);
 void radix_tree_delete(RadixTree *tree, uint16_t page_no);
+uint16_t radix_tree_peek_min(RadixTree *tree);
 uint16_t radix_tree_pop_min(RadixTree *tree);
 bool radix_tree_lookup(RadixTree *tree, uint16_t page_no);
 
 // Walk while executing callback function - e.g., build freelist
-// Allows to pass in a user_data parameter for modifying callback behaviour
 void radix_tree_walk(RadixTree *tree, void (*cb)(uint16_t page, void* user_data), void* user_data);
 
 // Conversion between freelist and radix tree

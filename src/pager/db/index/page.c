@@ -1,10 +1,6 @@
-#include "page.h"
-#include "page_format.h"
-
 
 /* 
-* B+ Tree operations:
-* 1) init/destroy - to create and clean up B+ Tree nodes - implicitly part of init data page (a page is a node) - so maybe no need make - probs just need to implement a Radix tree way to find either a freed page or fallback to highest page ID + 1 (stored in header as metadata)
+* B+ Tree operations: 1) init/destroy - to create and clean up B+ Tree nodes - implicitly part of init data page (a page is a node) - so maybe no need make - probs just need to implement a Radix tree way to find either a freed page or fallback to highest page ID + 1 (stored in header as metadata)
 * 2) btree_search() - to find entry
 * 3) btree_insert() - to add new rows to the B+ Tree index
 * 4) btree_split_leaf() - when leaf is too full, we have to split it. This also sets up the right sibling pointers that B+ Tree is known for fast linear access.
@@ -14,6 +10,10 @@
 * 8) btree_delete() - to delete entries. This is optional because of the complexity to rebalance the tree after operations, but might be useful. Also when entries are deleted, this also updates some reference counter, updates the free page radix tree and so on. Its a cascade effect.
 */
 
+#include "pager/db/db_format.h"
+#include "types/psql_types.h"
+#include <stdint.h>
+#include <string.h>
 
 #define PAGE_SIZE 4096
 #define PREFIX_SIZE 16
@@ -48,6 +48,7 @@ typedef struct {
 } NodeEntry;
 
 // B+ tree node (index page)
+// TODO: This would be the whole DBPage in practice
 typedef struct Node {
     uint8_t type; // NODE_INTERNAL or NODE_LEAF
     uint16_t num_entries; // Number of entries
@@ -63,13 +64,11 @@ typedef struct {
     uint32_t next_page_id;
 } BPlusTree;
 
-// Data page (slotted page, simplified)
 typedef struct {
-    uint8_t type; // TYPE_NULL, TYPE_INT, TYPE_TEXT
-    union {
-        int64_t int_value; // Raw INTEGER
-        char* text_value; // TEXT (malloc'd)
-    };
+    PSqlDataTypes* type; // TYPE_NULL, TYPE_INT, TYPE_TEXT
+    uint8_t** values;  // List of values - since values can be any sized
+    uint64_t* sizes;  // Size in bytes
+    OverflowPointer* overflow_pointers;  // If returned row has overflows
 } Row;
 
 // Iterator for range queries
@@ -94,12 +93,10 @@ Node* get_page(BPlusTree* tree, page_id_t page_id) {
 }
 
 // Encode INTEGER key (2^63 offset)
-void encode_int_key(int64_t value, uint8_t* prefix) {
-    uint64_t encoded = (uint64_t)(value + (1LL << 63));
-    for (int i = 0; i < 8; i++) {
-        prefix[i] = (encoded >> (56 - i * 8)) & 0xFF;
-    }
-    memset(prefix + 8, 0, 8);
+// Use of an XOR trick - since two's complement means negative values start with a bit of 1, doing an XOR with 0x80000000... will flip the value
+// In effect, we remap from (-2^63) - (2^63-1) to 0 - (2^64-1)
+uint64_t encode_int_key(int64_t value) {
+    return (uint64_t)value ^ 0x8000000000000000ULL;
 }
 
 // Compare prefixes (lexicographic)
@@ -109,10 +106,18 @@ int compare_prefix(const uint8_t* prefix1, const uint8_t* prefix2) {
 
 // Compare entries (including overflow for TEXT)
 int compare(BPlusTree* tree, const NodeEntry* entry1, const NodeEntry* entry2) {
+    // Compare directly lexicographically - logic works on encoded int and null as well
     int prefix_cmp = compare_prefix(entry1->prefix, entry2->prefix);
     if (prefix_cmp != 0) return prefix_cmp;
+
+    // Prefix comparison is insufficent to tell if equal - check for overflow pointers
+    // Both no overflow pointer - actually equal in value - logic works on encoded int and null too
     if (entry1->overflow_ptr == 0 && entry2->overflow_ptr == 0) return 0;
+
+    // If first entry has an overflow pointer - first entry is always going to be larger in value lexicographically - return first > second (-1)
     if (entry1->overflow_ptr == 0) return -1;
+
+    // If second entry has an overflow pointer - second entry is always going to be larger in value lexicographically - return second > first (1)
     if (entry2->overflow_ptr == 0) return 1;
     // Assume overflow stores TEXT remainder (simplified)
     char* full_key1 = (char*)get_page(tree, entry1->overflow_ptr);
@@ -120,7 +125,6 @@ int compare(BPlusTree* tree, const NodeEntry* entry1, const NodeEntry* entry2) {
     return strcmp(full_key1, full_key2);
 }
 
-// 1) Initialize B+ tree
 BPlusTree* btree_init() {
     BPlusTree* tree = (BPlusTree*)malloc(sizeof(BPlusTree));
     tree->root_id = 0;
@@ -179,7 +183,7 @@ NodeEntry* btree_search(BPlusTree* tree, const uint8_t* prefix, page_id_t* page_
     return NULL;
 }
 
-// 4) Split a leaf node
+// Split a leaf node
 void btree_split_leaf(BPlusTree* tree, Node* leaf, page_id_t leaf_id) {
     Node* new_leaf = allocate_page(tree);
     page_id_t new_leaf_id = tree->next_page_id - 1;

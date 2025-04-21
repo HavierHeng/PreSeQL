@@ -12,7 +12,7 @@ typedef enum {
     PSQL_CORRUPT,  /* Database disk image is malformed */
     PSQL_NOTFOUND, /* Table or record not found */
     PSQL_FULL,     /* Database or disk is full */
-    PSQL_MISUSE,   /* API used incorrectly */
+    PSQL_MISUSE,   /* API used incorrectly - psql_step() after PSQL_STEP_DONE */
     PSQL_INTERNAL  /* Internal logic error */
 } PSqlStatus;
 
