@@ -8,7 +8,7 @@
 
 #define INPUT_BUFFER_SIZE 1024
 
-PSqlStatus psql_prepare(PSql *db, char *preseql_input, PSqlStatement *statement) {
+PSqlStatus psql_prepare(char *preseql_input, PSqlStatement *statement) {
 
     Token **token_stream = NULL;
     size_t token_count = 0;
@@ -85,17 +85,17 @@ int main() {
     PSqlStatement statement;
     size_t statement_len = 0;
 
-    PSql db = {
-        .filename = "test.pseql",
-        .flags = 0,       // optional: define read-only, etc.
-        .pager = NULL,
-        .error_msg = NULL
-    };
+    // PSql db = {
+    //     .filename = "test.pseql",
+    //     .flags = 0,       // optional: define read-only, etc.
+    //     .pager = NULL,
+    //     .error_msg = NULL
+    // };
 
-    if (psql_open(&db) != PSQL_OK) {
-        fprintf(stderr, "Error: failed to open database.\n");
-        return 1;
-    }
+    // if (psql_open(&db) != PSQL_OK) {
+    //     fprintf(stderr, "Error: failed to open database.\n");
+    //     return 1;
+    // }
 
     printf("Welcome to PreSeQL\n");
     printf("Type Statments or 'exit' to quit\n");
@@ -142,7 +142,7 @@ int main() {
 
         if (strchr(preseql_input, ';')) {
 
-            if (psql_prepare(&db, statement_buffer, &statement) != PSQL_OK) {
+            if (psql_prepare(statement_buffer, &statement) != PSQL_OK) {
                 statement_buffer = NULL;
                 statement_len = 0;
                 continue;
@@ -153,7 +153,7 @@ int main() {
         }
     }
 
-    psql_close(&db);
+    // psql_close(&db);
     free(statement_buffer);
     
     return EXIT_SUCCESS;

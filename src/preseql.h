@@ -20,7 +20,7 @@ PSqlStatus psql_close(PSql* db);
 /* Frontend to PreSeQL: Lexer, Parser, Code Generator steps 
  * Returns either PSQL_OK or PSQL_ERROR (if invalid)
  * */
-PSqlStatus psql_prepare(PSql* db, char* sql_query, PSqlStatement* stmt);
+PSqlStatus psql_prepare(char* sql_query, PSqlStatement* stmt);
 
 /* Clean up VM state, but do not clear instructions inside it - i.e rewind 
  * Very useful for re-evaluating the same statement without needing to psql_prepare() again.

@@ -12,12 +12,12 @@ TEST_DIR = test
 # Source files by category (excluding main files)
 COMPILER_SRCS = $(wildcard $(SRC_DIR)/compiler/*.c)
 ALGORITHM_SRCS = $(wildcard $(SRC_DIR)/algorithm/*.c)
-PAGER_SRCS = $(wildcard $(SRC_DIR)/pager/*.c) \
-             $(wildcard $(SRC_DIR)/pager/db/data/*.c) \
-             $(wildcard $(SRC_DIR)/pager/db/index/*.c) \
-             $(wildcard $(SRC_DIR)/pager/db/overflow/*.c) \
-             $(wildcard $(SRC_DIR)/pager/journal/journal_data/*.c)
-VM_SRCS = $(wildcard $(SRC_DIR)/vm_engine/*.c)
+# PAGER_SRCS = $(wildcard $(SRC_DIR)/pager/*.c) \
+#              $(wildcard $(SRC_DIR)/pager/db/data/*.c) \
+#              $(wildcard $(SRC_DIR)/pager/db/index/*.c) \
+#              $(wildcard $(SRC_DIR)/pager/db/overflow/*.c) \
+#              $(wildcard $(SRC_DIR)/pager/journal/journal_data/*.c)
+# VM_SRCS = $(wildcard $(SRC_DIR)/vm_engine/*.c)
 ALLOCATOR_SRCS = $(wildcard $(SRC_DIR)/allocator/*.c)
 STATUS_SRCS = $(wildcard $(SRC_DIR)/status/*.c)
 TYPES_SRCS = $(wildcard $(SRC_DIR)/types/*.c)
@@ -62,7 +62,7 @@ test_pager: $(OBJ_DIR)/pager/pager.o $(OBJ_DIR)/algorithm/radix_tree.o $(OBJ_DIR
 
 
 # Compile main.c
-$(OBJ_DIR)/main.o: $(SRC_DIR)/main.c
+$(OBJ_DIR)/main.o: $(SRC_DIR)/client.c
 	$(CC) $(CFLAGS) -c $< -o $@
 
 # Compile test_radix.c
