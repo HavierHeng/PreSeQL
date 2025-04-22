@@ -21,12 +21,12 @@ typedef enum {
 #define NUM_BUCKETS 3
 
 typedef struct {
-    RadixTree buckets[NUM_BUCKETS];
+    RadixTree* buckets[NUM_BUCKETS];
 } FreeSpaceBuckets;
 
 typedef struct {
     uint8_t num_frees;  // Counter for free increments whenever a slot is freed
-    RadixTree buckets[NUM_BUCKETS];
+    RadixTree* buckets[NUM_BUCKETS];
 } FreeSpaceTracker;
 
 typedef struct {
